@@ -65,6 +65,7 @@ Figure 2 — Speed-accuracy trade-off and paired clean sweep, raw 150 ms. A: poo
 </p>
 
 ## Reproducing the Benchmarks & Tests
+Runtime warning: The full benchmark is computationally intensive. A modern multicore CPU should complete the experiment in several hours using parallel processing, whereas single-core execution may take several days. Use multicore processing for the full benchmark unless you specifically intend to measure single-core performance and runtime.
 
 ```bash
 
