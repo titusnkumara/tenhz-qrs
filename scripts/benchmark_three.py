@@ -151,7 +151,6 @@ def rr_error_stats(det, ann, fs):
 
 def _init():
     warnings.filterwarnings("ignore")
-    tenhz.warmup()
 
 
 def run_detector(method, ecg, fs):
@@ -607,7 +606,17 @@ def main():
                   f"F1 {100 * 2 * r['tp'] / max(2 * r['tp'] + r['fp'] + r['fn'], 1):6.2f}  {r['seconds']:7.3f} s"
                   + (f"  ERROR {r['error']}" if r["error"] else ""), flush=True)
     else:
-        with ProcessPoolExecutor(a.workers, initializer=_init) as ex:
+        # Compile Numba kernels once in the parent process.
+        warnings.filterwarnings("ignore")
+        print("Warming up Numba kernels...", flush=True)
+        tenhz.warmup()
+        print("Numba warmup complete. Starting workers.", flush=True)
+
+        import multiprocessing as mp
+
+        ctx = mp.get_context("fork")
+
+        with ProcessPoolExecutor(a.workers, initializer=_init, mp_context=ctx) as ex:
             futs = [ex.submit(task, t) for t in todo]
             for i, f in enumerate(as_completed(futs), 1):
                 try:
