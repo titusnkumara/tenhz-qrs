@@ -2,9 +2,9 @@
 
 Fast, deterministic QRS detection from a **10 Hz min-max representation** of single-lead ECG (`MinEl`, `TiTen`, and `Fusion`), compiled with Numba.
 
-* **State-of-the-art accuracy across 482 recordings (3,332 hours):** Evaluated across 8 PhysioNet databases (`MITDB`, `SVDB`, `EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`, and held-out `LTAFDB`), outperforming 20 competing detectors.
-* **10 Hz runtime efficiency:** **12×–871× faster** than standard Python and WFDB baselines while maintaining sub-5 ms RR interval MAE.
-* **Deterministic:** Zero-phase bandpass filtering at the native sampling rate followed by block min-max decimation to 10 Hz, matching the reference implementation beat for beat.
+* **State-of-the-art accuracy across 482 recordings (3,332 hours):** 8 PhysioNet databases (`MITDB`, `SVDB`, `EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`, held-out `LTAFDB`), outperforming 20 competing detectors. 124 tuning, 274 unseen test, 84 held-out.
+* **10 Hz runtime efficiency:** `TiTen` is the 1.0x reference. `Fusion` is 1.8x `TiTen`, `MinEl` is 1.5x `TiTen`. `TiTen` is 24x faster than `hamilton2002` and 1775x faster than WFDB `xqrs`, while maintaining sub-5 ms RR interval MAE on the test set.
+* **Deterministic:** Zero-phase bandpass filtering at the native sampling rate followed by block min-max decimation to 10 Hz.
 
 ## Installation
 
@@ -37,21 +37,25 @@ locs = tenhz.qrs_locations(ecg, fs=250, detector="titen")
 
 ## Benchmark Summary (Unseen Test Set, Raw ±150 ms AAMI Standard)
 
-Evaluated across 274 unseen test recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`) and 84 held-out long-term ambulatory recordings (`LTAFDB`, 1,961 hours):
+Top 7. All 23 in Figure 1. Test: 274 recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`). Held-out: 84 recordings (`LTAFDB`, 1,961 hours). RR is test set only. Runtime: `TiTen` = 1.0x.
 
-| Detector | Pooled Test F1 (%) | LTAFDB Held-Out F1 (%) | Test RR MAE / RMSE (ms) | Relative Runtime |
+| Detector | Pooled Test F1 (%) | LTAFDB Held-Out F1 (%) | Test RR MAE / RMSE (ms) | Relative Runtime (TiTen = 1.0x) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Fusion (10 Hz)** | **99.61** | **99.04** | **4.4 / 8.8** | **1.0×** |
-| **MinEl (10 Hz)** | **99.54** | **98.97** | **4.3 / 8.9** | **0.73×** |
-| **TiTen (10 Hz)** | **99.48** | **98.69** | **4.3 / 9.2** | **0.49×** |
-| hamilton2002 (NeuroKit2) | 99.39 | 98.61 | 10.3 / 18.0 | 12× |
-| emrich2023 (NeuroKit2) | 99.35 | 97.64 | 4.5 / 9.6 | 20× |
-| WFDB `xqrs` | 99.33 | 97.60 | 4.5 / 10.2 | 871× |
-| WFDB `gqrs` | 99.04 | 97.37 | 4.7 / 9.9 | 66× |
+| **Fusion (10 Hz)** | **99.61** | **99.02** | **4.4 / 8.8** | **1.8x** |
+| **MinEl (10 Hz)** | **99.54** | **98.97** | **4.3 / 8.9** | **1.5x** |
+| **TiTen (10 Hz)** | **99.48** | **98.69** | **4.3 / 9.2** | **1.0x** |
+| hamilton2002 | 99.39 | 98.61 | 10.3 / 18.0 | 23.5x |
+| emrich2023 | 99.35 | 97.64 | 4.5 / 9.6 | 41.5x |
+| WFDB `xqrs` | 99.33 | 97.60 | 4.5 / 10.2 | 1775x |
+| WFDB `gqrs` | 99.04 | 97.37 | 4.7 / 9.9 | 134x |
+
+Figure 1 — All 23 detectors, raw 150 ms. A: F1 across all 8 DBs plus pooled test. B: test RR timing error, MAE / RMSE in ms. C: relative runtime, 1.0x is TiTen.
 
 <p align="center">
   <img src="figures/fig_comprehensive_raw150.png" alt="Comprehensive benchmark, raw 150 ms" width="100%">
 </p>
+
+Figure 2 — Speed-accuracy trade-off and paired clean sweep, raw 150 ms. A: pooled test F1 vs relative runtime. B: paired per-record F1 gain, Fusion minus each comparator, with 95% bootstrap CI, on test (274 recs) and held-out LTAFDB (84 recs).
 
 <p align="center">
   <img src="figures/fig_speed_accuracy_cleansweep.png" alt="Speed-accuracy trade-off and paired clean sweep, raw 150 ms" width="100%">
@@ -66,8 +70,11 @@ pytest
 # Download and export PhysioNet databases to data/
 python scripts/download_physionet.py --dbs mitdb svdb edb nsrdb qtdb twadb nstdb ltafdb
 
-# Run benchmark evaluation
-python scripts/benchmark_three.py --data data --dbs edb nsrdb qtdb twadb nstdb --methods all --out results/benchmark_v1
+# Benchmark all 8 DBs
+python scripts/benchmark_three.py --data data --dbs mitdb svdb edb nsrdb qtdb twadb nstdb ltafdb --methods all --out results/benchmark_v1
+
+# Build figures
+python scripts/plot_figures.py --results results/benchmark_v1 --out figures/
 ```
 
 ## Citation
