@@ -13,6 +13,7 @@ python3 -m venv .venv             # create virtual environment
 source .venv/bin/activate         # activate 
 pip install -e .                  # core library (numpy, scipy, numba)
 pip install -e ".[data,test]"     # include PhysioNet export & pytest dependencies
+pip install -r requirements.txt
 ```
 
 ## Quickstart
