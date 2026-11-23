@@ -79,7 +79,7 @@ python scripts/benchmark_three.py --data data --dbs mitdb svdb edb nsrdb qtdb tw
 # Build figures
 python scripts/plot_figures.py --results results/benchmark_v1 --out figures/
 ```
-# Runtime on Intel Xeon Platinum 8358 CPU @ 2.60 GHz, 30 vCPUs, 200 GB RAM
+## Runtime on Intel Xeon Platinum 8358 CPU @ 2.60 GHz, 30 vCPUs, 200 GB RAM
 | Detector | Single-Core CPU Time | 30-Core Wall-Clock | Share of Total |
 | :--- | :---: | :---: | :---: |
 | `martinez2004` | 850.37 min (14.17 hr) | 28.35 min | 40.36% |
