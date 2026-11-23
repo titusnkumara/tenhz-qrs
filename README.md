@@ -49,6 +49,10 @@ Evaluated across 274 unseen test recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `N
 | WFDB `xqrs` | 99.33 | 97.60 | 4.5 / 10.2 | 871× |
 | WFDB `gqrs` | 99.04 | 97.37 | 4.7 / 9.9 | 66× |
 
+<p align="center">
+  <img src="figures/fig_comprehensive_raw150.png" alt="Comprehensive benchmark, raw 150 ms" width="100%">
+</p>
+
 ## Reproducing the Benchmarks & Tests
 
 ```bash

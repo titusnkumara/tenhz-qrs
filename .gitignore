@@ -30,7 +30,6 @@ htmlcov/
 data/
 results/
 *.csv
-*.png
 *.mat
 *.npz
 !tests/golden.npz
