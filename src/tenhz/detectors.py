@@ -1,6 +1,4 @@
 """MinEl and TiTen: bandpass at the native rate, 10 Hz min-max stream, detection.
-
-Wrappers copied from tools/tenhz_fast.py; the loops run in the Numba kernels.
 """
 import math
 
