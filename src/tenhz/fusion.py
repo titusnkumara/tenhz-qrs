@@ -1,8 +1,5 @@
 """Fusion: MinEl + TiTen on one shared 7-32 Hz stream, an RR-plausibility
-decoder (Viterbi) and an adaptive per-window switch. Exploratory: not part of
-the published two-detector results.
-
-Copied from tools/tenhz_fast.py (fusion settings as benchmark_fusion.detect_fusion).
+decoder (Viterbi) and an adaptive per-window switch.
 """
 import numpy as np
 
