@@ -1,0 +1,7 @@
+# detectors (import tenhz)
+numpy>=1.24
+scipy>=1.10
+numba>=0.58
+# scripts (download_db.py, run_detectors.py)
+wfdb>=4.1
+pandas>=2.0
