@@ -5,6 +5,7 @@ numba>=0.58
 # Additional benchmark detectors
 neurokit2
 py-ecg-detectors
+ts2vg
 # scripts (download_db.py, run_detectors.py)
 wfdb>=4.1
 pandas>=2.0
