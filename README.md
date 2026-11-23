@@ -53,6 +53,10 @@ Evaluated across 274 unseen test recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `N
   <img src="figures/fig_comprehensive_raw150.png" alt="Comprehensive benchmark, raw 150 ms" width="100%">
 </p>
 
+<p align="center">
+  <img src="figures/fig_speed_accuracy_cleansweep.png" alt="Speed-accuracy trade-off and paired clean sweep, raw 150 ms" width="100%">
+</p>
+
 ## Reproducing the Benchmarks & Tests
 
 ```bash
