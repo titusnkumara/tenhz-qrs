@@ -9,6 +9,8 @@ Fast, deterministic QRS detection from a **10 Hz min-max representation** of sin
 ## Installation
 
 ```bash
+python3 -m venv .venv             # create virtual environment
+source .venv/bin/activate         # activate 
 pip install -e .                  # core library (numpy, scipy, numba)
 pip install -e ".[data,test]"     # include PhysioNet export & pytest dependencies
 ```
