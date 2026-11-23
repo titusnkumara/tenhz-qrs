@@ -66,8 +66,6 @@ Figure 2 — Speed-accuracy trade-off and paired clean sweep, raw 150 ms. A: poo
 ## Reproducing the Benchmarks & Tests
 
 ```bash
-# Run golden regression tests
-pytest
 
 # Download and export PhysioNet databases to data/
 python scripts/download_physionet.py --dbs mitdb svdb edb nsrdb qtdb twadb nstdb ltafdb
