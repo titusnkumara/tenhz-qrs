@@ -315,7 +315,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dbs", nargs="+", default=list(DATABASES), choices=list(DATABASES))
-    ap.add_argument("--workers", type=int, default=2, help="parallel records (PhysioNet throttles heavy parallel use)")
+    ap.add_argument("--workers", type=int, default=6, help="parallel records (PhysioNet throttles heavy parallel use)")
     ap.add_argument("--retries", type=int, default=2, help="re-processing attempts per record")
     ap.add_argument("--net-retries", type=int, default=8, help="download attempts per file")
     ap.add_argument("--backoff", type=float, default=5.0, help="seconds, doubled per retry")
