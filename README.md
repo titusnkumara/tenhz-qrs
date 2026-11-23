@@ -71,8 +71,8 @@ Figure 2 — Speed-accuracy trade-off and paired clean sweep, raw 150 ms. A: poo
 # Download and export PhysioNet databases to data/
 python scripts/download_physionet.py --dbs mitdb svdb edb nsrdb qtdb twadb nstdb ltafdb
 
-# Benchmark all 8 DBs
-python scripts/benchmark_three.py --data data --dbs mitdb svdb edb nsrdb qtdb twadb nstdb ltafdb --methods all --out results/benchmark_v1
+# Benchmark all 8 DBs (10-core processing)
+python scripts/benchmark_three.py --data data --dbs mitdb svdb edb nsrdb qtdb twadb nstdb ltafdb --methods all --out results/benchmark_v1 --workers 10
 
 # Build figures
 python scripts/plot_figures.py --results results/benchmark_v1 --out figures/
