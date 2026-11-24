@@ -101,13 +101,75 @@ def _manikandan_fixed(signal, sampling_rate=1000, **kwargs):
 
 
 # ------------------------------------------------------------------ NeuroKit2
+def _vg_fixed(signal, sampling_rate=1000, window_seconds=2, window_overlap=0.5, accelerated=True, **kwargs):
+    """NeuroKit2 0.3.0 _ecg_findpeaks_visibilitygraph (emrich2023) with one guard added. When a 2 s window
+    has no local maximum above its median (a flat or saturated stretch of signal), the stock code builds a
+    visibility graph from an empty segment and raises IndexError. Here such a window gets zero weights and
+    the loop moves on. Every other line, and the result for every window that has candidate peaks, is the
+    same as the installed code."""
+    import scipy.signal
+    import ts2vg
+    from neurokit2.ecg.ecg_findpeaks import _ecg_findpeaks_visgraphthreshold
+
+    N = len(signal)
+    M = int(window_seconds * sampling_rate)
+    L = 0
+    R = M
+    dM = int(np.ceil(window_overlap * M))
+    n_segments = int(np.ceil((N - R) / (M - dM) + 1))
+    weights = np.zeros(N)
+    BETA = 0.55
+    if np.max(signal) == np.min(signal):
+        return np.array([])
+    if N < M:
+        M, R = N, N
+        n_segments = 1
+    for jj in range(n_segments):
+        segment = signal[L:R]
+        if accelerated:
+            threshold = np.quantile(segment, 0.5)
+            indices_maxima = scipy.signal.find_peaks(segment)[0]
+            segment_maxima = segment[indices_maxima]
+            greater = np.argwhere(segment_maxima > threshold).flatten()
+            indices = indices_maxima[greater]
+            segment = segment_maxima[greater]
+        else:
+            indices = np.arange(len(segment))
+        if len(indices) >= 2:                                   # the added guard
+            A = ts2vg.NaturalVG(directed="top_to_bottom").build(segment, indices).adjacency_matrix()
+            size = len(indices)
+            w = np.ones(size) / size
+            while np.count_nonzero(w) / size >= BETA:
+                _w = np.matmul(A, w)
+                _w /= np.linalg.norm(_w)
+                if np.any(np.isnan(_w)):
+                    break
+                w = _w
+            if L == 0:
+                weights[L + indices] = w
+            elif N - dM + 1 <= L and L + 1 <= N:
+                weights[L + indices] = 0.5 * (weights[L + indices] + w)
+            else:
+                weights[L + indices[indices <= dM]] = 0.5 * (w[indices <= dM] + weights[L + indices[indices <= dM]])
+                weights[L + indices[indices > dM]] = w[indices > dM]
+        if R - L < M:
+            break
+        L += M - dM
+        if R + (M - dM) <= N:
+            R += M - dM
+        else:
+            R = N
+    rpeaks = _ecg_findpeaks_visgraphthreshold(signal * weights, sampling_rate)
+    return np.array(rpeaks, dtype="int")
+
+
 # NeuroKit2's ssf (slope sum function, from BioSPPy) marks a beat where the squared negative first
 # difference exceeds a fixed threshold, default 20 in raw signal units per sample. For ECG in mV that is
 # never reached, so with the default it finds no beats at all. The threshold below is in (mV/s)^2, so one
 # value holds at every sampling rate (it is divided by fs^2 before the call). It was chosen on the training
 # databases only (MITDB without 118/119, and SVDB) with scripts/tune_ssf.py, as MinEl and TiTen were.
 # TENHZ_SSF_THRESHOLD overrides it (tune_ssf.py uses this).
-SSF_THRESHOLD = 600.0
+SSF_THRESHOLD = 400.0
 
 
 def _ssf_threshold():
@@ -122,19 +184,25 @@ def _nk2(method, ecg, fs):
     try:
         _, info = nk.ecg_peaks(clean, sampling_rate=fs, method=method, correct_artifacts=False, **kw)
     except Exception as e:
-        if method != "manikandan2012":
+        # A few NeuroKit2 detectors raise on some records because of a bug in the library, not because the
+        # method fails. Re-run only those records with a patched copy that fixes the bug; every other
+        # record runs the installed NeuroKit2 code unchanged.
+        patched = {"manikandan2012": ("_ecg_findpeaks_manikandan", _manikandan_fixed,
+                                      "patched copy without its unused index block"),
+                   "emrich2023": ("_ecg_findpeaks_visibilitygraph", _vg_fixed,
+                                  "patched copy that skips windows with no candidate peaks")}
+        if method not in patched:
             raise
-        # NeuroKit2 raises on some records because of the unused block above; use the patched copy
-        # only for those records, so every other record runs the installed NeuroKit2 code unchanged.
         import importlib
+        attr, fixed, why = patched[method]
         mod = importlib.import_module("neurokit2.ecg.ecg_findpeaks")
-        orig = mod._ecg_findpeaks_manikandan
-        mod._ecg_findpeaks_manikandan = _manikandan_fixed
+        orig = getattr(mod, attr)
+        setattr(mod, attr, fixed)
         try:
-            _, info = nk.ecg_peaks(clean, sampling_rate=fs, method=method, correct_artifacts=False)
+            _, info = nk.ecg_peaks(clean, sampling_rate=fs, method=method, correct_artifacts=False, **kw)
         finally:
-            mod._ecg_findpeaks_manikandan = orig
-        _NOTE[0] = f"NeuroKit2 raised {type(e).__name__}; patched copy without its unused index block"
+            setattr(mod, attr, orig)
+        _NOTE[0] = f"NeuroKit2 raised {type(e).__name__}; {why}"
     return _idx(info["ECG_R_Peaks"])
 
 
