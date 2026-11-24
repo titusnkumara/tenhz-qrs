@@ -3,7 +3,8 @@ sample indices (sorted, unique, int64). All see the same single lead at its nati
 
 Groups (names for --methods in benchmark_three.py):
   ours      minel titen fusion                       (Numba, this package)
-  nk2       the 17 NeuroKit2 R-peak methods except promac (ssf is in, but scores about 0 here)
+  nk2       the 17 NeuroKit2 R-peak methods except promac (ssf with a threshold set on the
+            training databases, see SSF_THRESHOLD)
   wfdb      xqrs gqrs                                (WFDB-Python, the PhysioNet reference code)
   pyecg     pyecg_matched ...                        (py-ecg-detectors; only the detector that
                                                       NeuroKit2 does not already provide)
@@ -100,11 +101,26 @@ def _manikandan_fixed(signal, sampling_rate=1000, **kwargs):
 
 
 # ------------------------------------------------------------------ NeuroKit2
+# NeuroKit2's ssf (slope sum function, from BioSPPy) marks a beat where the squared negative first
+# difference exceeds a fixed threshold, default 20 in raw signal units per sample. For ECG in mV that is
+# never reached, so with the default it finds no beats at all. The threshold below is in (mV/s)^2, so one
+# value holds at every sampling rate (it is divided by fs^2 before the call). It was chosen on the training
+# databases only (MITDB without 118/119, and SVDB) with scripts/tune_ssf.py, as MinEl and TiTen were.
+# TENHZ_SSF_THRESHOLD overrides it (tune_ssf.py uses this).
+SSF_THRESHOLD = 600.0
+
+
+def _ssf_threshold():
+    import os
+    return float(os.environ.get("TENHZ_SSF_THRESHOLD", SSF_THRESHOLD))
+
+
 def _nk2(method, ecg, fs):
     import neurokit2 as nk
     clean = nk.ecg_clean(ecg, sampling_rate=fs, method=NK_CLEAN.get(method, "neurokit"))
+    kw = {"threshold": _ssf_threshold() / fs ** 2} if method == "ssf" else {}
     try:
-        _, info = nk.ecg_peaks(clean, sampling_rate=fs, method=method, correct_artifacts=False)
+        _, info = nk.ecg_peaks(clean, sampling_rate=fs, method=method, correct_artifacts=False, **kw)
     except Exception as e:
         if method != "manikandan2012":
             raise
