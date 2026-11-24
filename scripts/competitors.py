@@ -169,7 +169,7 @@ def _vg_fixed(signal, sampling_rate=1000, window_seconds=2, window_overlap=0.5, 
 # value holds at every sampling rate (it is divided by fs^2 before the call). It was chosen on the training
 # databases only (MITDB without 118/119, and SVDB) with scripts/tune_ssf.py, as MinEl and TiTen were.
 # TENHZ_SSF_THRESHOLD overrides it (tune_ssf.py uses this).
-SSF_THRESHOLD = 400.0
+SSF_THRESHOLD = 600.0
 
 
 def _ssf_threshold():
