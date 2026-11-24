@@ -19,11 +19,14 @@ Rules (identical to tools/benchmark_neurokit.py; match() and the bootstrap are c
 median offset to the reference (estimated within +/-150 ms) before scoring. It shows detection quality independent of which
 point of the QRS is marked; it is not a result for the detectors as they would run.
 
-Competitors: --methods ours nk2 wfdb baseline (see competitors.py). Speed: run with --workers 1 and
-quote only that. Times are detection only
-(file reading excluded), after the Numba kernels are compiled.
+Competitors: --methods ours nk2 wfdb baseline (see competitors.py).
+Timing: each record's time covers detection only (file reading, saving detections and the RR statistics
+are excluded), after the Numba kernels are compiled. With --workers 1 these are single-process times;
+with more workers they are times under shared load. run_info.json records the worker count, the total
+wall-clock time of the run, the CPU and the library versions.
 
-Outputs in --out (must be new or empty): per_record.csv, summary.csv, summary.md.
+Outputs in --out (must be new or empty): per_record.csv, summary.csv, summary.md, headline.*,
+paired_*.*, rr_error*.*, run_info.json.
 """
 from __future__ import annotations
 
@@ -149,6 +152,48 @@ def rr_error_stats(det, ann, fs):
                                                                             minlength=RR_BINS)
 
 
+def _write_run_info(a, wall_min, n_recs, n_runs, started):
+    """run_info.json: how this run was made (wall-clock time, machine, library versions, command)."""
+    import platform
+    import subprocess
+    from importlib.metadata import PackageNotFoundError, version
+    cpu = platform.processor()
+    try:
+        with open("/proc/cpuinfo") as f:
+            cpu = next(l.split(":", 1)[1].strip() for l in f if l.startswith("model name"))
+    except Exception:
+        try:
+            cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True,
+                                 text=True).stdout.strip() or cpu
+        except Exception:
+            pass
+    libs = {}
+    for p in ["numpy", "scipy", "numba", "pandas", "wfdb", "neurokit2", "py-ecg-detectors"]:
+        try:
+            libs[p] = version(p)
+        except PackageNotFoundError:
+            libs[p] = None
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
+                                cwd=os.path.dirname(os.path.abspath(__file__))).stdout.strip()
+    except Exception:
+        commit = ""
+    try:
+        import psutil
+        ram_gb = round(psutil.virtual_memory().total / 2 ** 30, 1)
+    except Exception:
+        ram_gb = None
+    info = {"wall_clock_min": round(wall_min, 2), "started": started,
+            "finished": time.strftime("%Y-%m-%d %H:%M:%S %z"), "workers": a.workers, "records": n_recs,
+            "runs": n_runs, "methods": a.methods, "dbs": a.dbs, "cpu": cpu, "logical_cpus": os.cpu_count(),
+            "ram_gb": ram_gb, "os": platform.platform(), "python": platform.python_version(),
+            "tenhz": getattr(tenhz, "__version__", None), "libraries": libs, "git_commit": commit,
+            "command": " ".join(sys.argv)}
+    with open(os.path.join(a.out, "run_info.json"), "w") as f:
+        json.dump(info, f, indent=2)
+    print(f"wrote {os.path.join(a.out, 'run_info.json')}", flush=True)
+
+
 def _init():
     warnings.filterwarnings("ignore")
 
@@ -173,12 +218,12 @@ def task(args):
         det = run_detector(method, ecg, fs); err = ""
     except Exception as e:  # a failing detector scores every beat as missed
         det = np.zeros(0, np.int64); err = f"{type(e).__name__}: {e}"[:200]
+    sec = time.perf_counter() - t0          # detection only: saving and RR statistics are not timed
     note = competitors.take_note()
     if save_dir and not err:
         os.makedirs(os.path.join(save_dir, db), exist_ok=True)
         np.save(os.path.join(save_dir, db, f"{rec}__{method}.npy"), np.asarray(det, np.int32))
     rr = rr_error_stats(det, ann, fs) if not err else (0, 0.0, 0.0, np.zeros(RR_BINS, np.int64))
-    sec = time.perf_counter() - t0
     out = []
     variants = [("raw", det)]
     if correct:
@@ -431,7 +476,8 @@ def headline(all_rows, out, tol):
                      + " | ".join(f(x[d]) for d in TEST) + f" | {f(x.per_db_mean_F1)} | " + "".join(f"{f(x[d])} | " for d in HELD)
                      + f"{x.raw150_F1:.2f} | "
                      f"{x.raw_offset_ms:+.0f} | {x.s_per_h:.4f} | {int(x.failed)} |")
-    lines += ["", "s per h comes from the run that produced these rows: indicative only unless run with --workers 1."]
+    lines += ["", "s per h: detection time per hour of ECG from the run that produced these rows; see run_info.json "
+              "for the number of parallel workers."]
     open(os.path.join(out, "headline.md"), "w").write("\n".join(lines) + "\n")
 
 
@@ -525,7 +571,7 @@ def main():
     ap.add_argument("--methods", nargs="+", default=["ours"],
                     help="detector and/or group names: ours (default), nk2, wfdb, pyecg, baseline, all; "
                          "e.g. --methods ours nk2 wfdb baseline")
-    ap.add_argument("--workers", type=int, default=1, help="1 for clean timing; more only for a quick look")
+    ap.add_argument("--workers", type=int, default=1, help="parallel processes; 1 gives single-process timing (default 1)")
     ap.add_argument("--offset-correct", action=argparse.BooleanOptionalAction, default=True,
                     help="also score after removing each record's median offset (oracle diagnostic, see "
                          "docstring); on by default, --no-offset-correct to skip")
@@ -591,13 +637,12 @@ def main():
     if not recs:
         sys.exit("no records found")
     todo = [(a.data, db, r, fs, m, tuple(a.tol_ms), a.offset_correct, save_dir) for (db, r, fs) in recs for m in a.methods]
-    # longest records first so the 24 h NSRDB files do not finish last
-    todo.sort(key=lambda t: (t[1] != "nsrdb", t[1] != "edb"))
+    # longest records first (24 h LTAFDB and NSRDB, then 2 h EDB) so they do not finish last
+    todo.sort(key=lambda t: (t[1] not in ("ltafdb", "nsrdb"), t[1] != "edb"))
     print(f"{len(recs)} records x {len(a.methods)} detectors = {len(todo)} runs; {a.workers} worker(s)", flush=True)
     if a.workers > 1:
-        print("note: with several workers the 's per h' column is indicative only; quote speed from "
-              "benchmark_timing.py or a --workers 1 run", flush=True)
-    rows = []; t0 = time.time()
+        print("note: with several workers, per-record times are measured under shared load", flush=True)
+    rows = []; t0 = time.time(); started = time.strftime("%Y-%m-%d %H:%M:%S %z")
     if a.workers == 1:
         _init()
         for i, t in enumerate(todo, 1):
@@ -626,7 +671,9 @@ def main():
                 rows += res
                 if i % 25 == 0 or i == len(todo):
                     print(f"[{i}/{len(todo)}]", flush=True)
-    print(f"\nRan {len(todo)} in {(time.time() - t0) / 60:.1f} min\n")
+    wall_min = (time.time() - t0) / 60
+    print(f"\nRan {len(todo)} in {wall_min:.1f} min\n")
+    _write_run_info(a, wall_min, len(recs), len(todo), started)
     R = pd.DataFrame(rows)
     R = R[~R.db.isin(a.drop_dbs)].reset_index(drop=True)
     R.to_csv(os.path.join(a.out, "per_record.csv"), index=False)
