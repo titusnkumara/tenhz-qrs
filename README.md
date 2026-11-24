@@ -4,7 +4,7 @@
 
 Fast, deterministic QRS detection from a **10 Hz min-max representation** of single-lead ECG (`MinEl`, `TiTen`, and `Fusion`), compiled with Numba.
 
-- **State-of-the-art accuracy across 482 recordings (3,332 hours):** Tested on 8 PhysioNet databases (`MITDB`, `SVDB`, `EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`, and held-out `LTAFDB`). The detectors outperform 20 competing QRS detectors, including on recordings not used during development or tuning.
+- **State-of-the-art accuracy across 482 recordings (2,663 hours, ~12 million beats):** Tested on 8 PhysioNet databases (`MITDB`, `SVDB`, `EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`, and held-out `LTAFDB`). The detectors outperform 20 competing QRS detectors, including on recordings not used during development or tuning.
 - **10 Hz runtime efficiency:** `TiTen` is the fastest of the three detectors. `Fusion` takes 1.6× and `MinEl` 1.4× its runtime. Even so, `TiTen` is 26× faster than `hamilton2002` and 51× faster than WFDB `xqrs`, with RR interval MAE below 5 ms on the test set.
 - **Deterministic processing:** ECG is bandpass-filtered at its native sampling rate before being converted into a 10 Hz block min-max representation.
 
