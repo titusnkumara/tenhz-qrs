@@ -97,6 +97,23 @@ def find_fastest_reference(df: pd.DataFrame) -> tuple[int, float, str]:
     return fastest_idx, fastest_sph, fastest_short
 
 
+def dataset_totals(per_record_path: str | None):
+    """Records, hours and reference beats in the run, each record counted once (from per_record.csv)."""
+    if not per_record_path or not os.path.exists(per_record_path):
+        return None
+    pr = pd.read_csv(per_record_path, dtype={"record": str}, low_memory=False)
+    r = pr[(pr["variant"] == "raw")]
+    r = r[r["tol_ms"] == r["tol_ms"].max()].drop_duplicates(["db", "record"])
+    return len(r), float(r["hours"].sum()), int((r["tp"] + r["fn"]).sum())
+
+
+def totals_text(tot) -> str:
+    if tot is None:
+        return ""
+    n, h, b = tot
+    return f"{n} Recordings, {h:,.0f} Hours, {b / 1e6:.1f} M Beats"
+
+
 def holm_adjust(pvals: list[float]) -> list[float]:
     m = len(pvals)
     order = np.argsort(pvals)
@@ -137,20 +154,22 @@ def compute_wilcoxon_stars(per_record_path: str, variant: str, tol_ms: float, de
     if not per_record_path or not os.path.exists(per_record_path):
         print(f"  [wilcoxon] per_record not found, skipping stars: {per_record_path}")
         return stars, win_counts, total_pairs
-    pr = pd.read_csv(per_record_path, low_memory=False)
+    pr = pd.read_csv(per_record_path, dtype={"record": str}, low_memory=False)
     sub = pr[(pr["variant"] == variant) & (pr["tol_ms"] == tol_ms)].copy()
     if sub.empty:
         print(f"  [wilcoxon] no per_record rows for variant={variant} tol={tol_ms}")
         return stars, win_counts, total_pairs
     denom = 2 * sub["tp"] + sub["fp"] + sub["fn"]
-    sub["rec_f1"] = np.where(denom > 0, 100.0 * 2 * sub["tp"] / denom, 0.0)
+    sub["rec_f1"] = np.where(denom > 0, 100.0 * 2 * sub["tp"] / denom.clip(lower=1), np.nan)
     avail = set(sub["method"].astype(str).str.lower())
     sub["m_low"] = sub["method"].astype(str).str.lower()
     piv = sub.pivot_table(index=["db", "record"], columns="m_low", values="rec_f1", aggfunc="first")
     if "fusion" not in piv.columns:
         print("  [wilcoxon] 'fusion' not in per_record methods, skipping stars")
         return stars, win_counts, total_pairs
-    db_groups = [(db, [db]) for db in ALL_DBS] + [("test_F1", TEST_DBS)]
+    # Stars only where Fusion was not tuned (test + held-out); never on MITDB/SVDB (in-sample).
+    # The pooled test column is starred from the paired table instead (see plot_three_panel_benchmark).
+    db_groups = [(db, [db]) for db in TEST_DBS + HELDOUT_DBS]
     comp_dets = [d for d in detectors_ordered if not is_ours(d)]
     for col_key, dbs in db_groups:
         mask = piv.index.get_level_values(0).isin(dbs)
@@ -171,11 +190,11 @@ def compute_wilcoxon_stars(per_record_path: str, variant: str, tol_ms: float, de
             else:
                 _, p = wilcoxon(nz, alternative="two-sided")
             p_raws.append(float(p))
-            valid_dets.append(det)
+            valid_dets.append((det, float(np.mean(diff)) if len(diff) else 0.0))
         if p_raws:
             p_adj = holm_adjust(p_raws)
-            for det, pa in zip(valid_dets, p_adj):
-                stars[(det, col_key)] = (pa < 0.05)
+            for (det, dm), pa in zip(valid_dets, p_adj):
+                stars[(det, col_key)] = (pa < 0.05 and dm > 0)   # star = Fusion significantly BETTER
     unseen_dbs = TEST_DBS + HELDOUT_DBS
     total_pairs = len(unseen_dbs) * len(comp_dets)
     for our_lbl, our_key in [("Fusion", "fusion"), ("MinEl", "minel"), ("TiTen", "titen")]:
@@ -217,6 +236,7 @@ def plot_three_panel_benchmark(
     variant: str = "raw",
     tol_ms: float = 150.0,
     stem: str = "fig_comprehensive_raw150",
+    paired_path: str | None = None,
 ):
     print(f"\n[three-panel] {stem}: variant={variant} tol={tol_ms}")
     print(f"  summary: {summary_path} exists={os.path.exists(summary_path) if summary_path else False}")
@@ -265,6 +285,19 @@ def plot_three_panel_benchmark(
     fastest_idx, fastest_sph, fastest_short = find_fastest_reference(sub)
     rel_rt = sub["s_per_h"].to_numpy(dtype=float) / max(fastest_sph, 1e-9)
     stars, win_counts, total_pairs = compute_wilcoxon_stars(per_record_path, variant, tol_ms, detectors)
+    # Pooled test column: same rule as the paired table (bootstrap CI excludes 0 AND Holm p < 0.05).
+    if paired_path and os.path.exists(paired_path):
+        pp = pd.read_csv(paired_path)
+        pp = pp[pp["reference"] == "fusion"]
+        avail_keys = set(pp["comparator"].astype(str))
+        for det in detectors:
+            if is_ours(det):
+                continue
+            mk = method_key_from_label(det, avail_keys)
+            row = pp[pp["comparator"] == mk]
+            if len(row):
+                stars[(det, "test_F1")] = str(row.iloc[0]["verdict"]) == "reference better"
+    no_det = [d for d, se, ppv in zip(detectors, sub["test_Se"], sub["test_PPV"]) if se == 0 and ppv == 0]
 
     fig = plt.figure(figsize=(16.8, max(8.4, 0.43 * n_det)))
     gs = gridspec.GridSpec(1, 5, width_ratios=[4.3, 1.15, 0.44, 1.15, 0.48], wspace=0.08)
@@ -300,7 +333,7 @@ def plot_three_panel_benchmark(
     ax_hm.set_xticklabels(col_headers, fontsize=7.5, fontweight="bold", color="#222222")
     ax_hm.xaxis.tick_top()
     ax_hm.set_yticks(y_idx)
-    ranked_labels = [f"{i + 1}. {clean_name(d)}" for i, d in enumerate(detectors)]
+    ranked_labels = [f"{i + 1}. {clean_name(d)}" + (" \u2020" if d in no_det else "") for i, d in enumerate(detectors)]
     ax_hm.set_yticklabels(ranked_labels, fontsize=8.3)
     for tick, det in zip(ax_hm.get_yticklabels(), detectors):
         if is_ours(det):
@@ -308,7 +341,7 @@ def plot_three_panel_benchmark(
             tick.set_fontweight("bold")
         else:
             tick.set_color("#222222")
-    title_tag = "(* $p_{\\mathrm{Holm}} < 0.05$ vs. Fusion)" if stars else ""
+    title_tag = "(* = Fusion significantly better)" if stars else ""
     ax_hm.set_title(f"A. F1 Across All 8 Databases & Pooled Test {title_tag}", fontsize=9.8, pad=26, loc="left")
     cbar_ax = ax_hm.inset_axes([0.02, -0.055, 0.96, 0.018])
     cb = fig.colorbar(mpl.cm.ScalarMappable(norm=mcolors.Normalize(0, 100), cmap=cmap), cax=cbar_ax, orientation="horizontal")
@@ -373,10 +406,10 @@ def plot_three_panel_benchmark(
     # Panel C: Relative Runtime
     split_rt = 95.0
     max_rt_val = float(np.nanmax(rel_rt)) if np.any(np.isfinite(rel_rt)) else 1800.0
-    max_rt = max(1950.0, max_rt_val * 1.22)
-    right_top_tick = int(round(max_rt_val, -2))
-    right_mid_tick = max(400, int(round(right_top_tick * 0.5, -2)))
-    prep_broken_pair(ax_rt_l, ax_rt_r, (0, split_rt), (110.0, max_rt), [0, 25, 50, 75], [200, right_mid_tick, right_top_tick])
+    lo_r = split_rt + 15.0
+    max_rt = max(lo_r + 50.0, max_rt_val * 1.25)
+    r_ticks = [t for t in mpl.ticker.MaxNLocator(3).tick_values(lo_r, max_rt) if lo_r <= t <= max_rt]
+    prep_broken_pair(ax_rt_l, ax_rt_r, (0, split_rt), (lo_r, max_rt), [0, 25, 50, 75], r_ticks)
     ax_rt_l.axvline(1.0, color=MID_GREEN, linestyle="--", linewidth=0.9, zorder=2)
     for i, (det, rt) in enumerate(zip(detectors, rel_rt)):
         if np.isnan(rt):
@@ -397,10 +430,16 @@ def plot_three_panel_benchmark(
     ax_rt_l.set_xlabel(f"Relative Runtime (x {fastest_short}, linear)", fontsize=8.3, x=0.72)
 
     mode_str = f"Raw +/-{tol_ms:g} ms" if variant == "raw" else f"Offset-Adjusted +/-{tol_ms:g} ms"
-    fig.suptitle(f"Comprehensive QRS Detector Benchmark: All {n_det} Algorithms Across 482 Recordings (3,332 Hours, {mode_str})", fontsize=12.2, y=0.985)
+    tot = totals_text(dataset_totals(per_record_path))
+    fig.suptitle(f"QRS Detector Benchmark: {n_det} Detectors, {tot + ', ' if tot else ''}{mode_str}", fontsize=12.2, y=0.985)
+    notes = ["Per-database stars: per-record Wilcoxon, Holm-corrected, Fusion better. "
+             "Pooled-test stars: paired bootstrap CI excludes 0 and Holm p < 0.05 (as in the paired table)."]
+    if no_det:
+        notes.append("\u2020 produced no detections on any test record with its library defaults.")
+    fig.text(0.01, -0.045, "  ".join(notes), ha="left", va="top", fontsize=7.0, color="#444444")
     if total_pairs > 0:
-        badge = (f"Unseen-DB Win Rates vs. {n_det - 3} Competing Detectors (6 Unseen DBs = {total_pairs} Pairs, Paired Wilcoxon $p_{{\\mathrm{{Holm}}}} < 0.05$):   Fusion: {win_counts['Fusion']}/{total_pairs} ({100*win_counts['Fusion']/total_pairs:.1f}%)  |  MinEl: {win_counts['MinEl']}/{total_pairs} ({100*win_counts['MinEl']/total_pairs:.1f}%)  |  TiTen: {win_counts['TiTen']}/{total_pairs} ({100*win_counts['TiTen']/total_pairs:.1f}%)")
-        fig.text(0.55, 0.942, badge, ha="center", va="center", fontsize=8.2, color=DARK_GREEN, bbox=dict(boxstyle="round,pad=0.35", facecolor=MINT_TINT, edgecolor=MID_GREEN, linewidth=0.9))
+        badge = (f"Unseen-DB Win Rates vs. {n_det - 3} Competing Detectors ({len(TEST_DBS + HELDOUT_DBS)} Unseen DBs = {total_pairs} Pairs, Paired Wilcoxon $p_{{\\mathrm{{Holm}}}} < 0.05$):   Fusion: {win_counts['Fusion']}/{total_pairs} ({100*win_counts['Fusion']/total_pairs:.1f}%)  |  MinEl: {win_counts['MinEl']}/{total_pairs} ({100*win_counts['MinEl']/total_pairs:.1f}%)  |  TiTen: {win_counts['TiTen']}/{total_pairs} ({100*win_counts['TiTen']/total_pairs:.1f}%)")
+        fig.text(0.01, -0.012, badge, ha="left", va="top", fontsize=8.2, color=DARK_GREEN, bbox=dict(boxstyle="round,pad=0.35", facecolor=MINT_TINT, edgecolor=MID_GREEN, linewidth=0.9))
     os.makedirs(out_dir, exist_ok=True)
     fig.savefig(os.path.join(out_dir, f"{stem}.png"), dpi=300)
     fig.savefig(os.path.join(out_dir, f"{stem}.pdf"))
@@ -500,7 +539,7 @@ def plot_speed_accuracy_cleansweep(
     ax_sc.set_xlim(-5.0, 152.0)
     ax_sc.set_ylim(82.0, 100.5)
     ax_sc.set_xlabel(f"Relative Compute Time (x {fastest_short}, linear scale, lower is faster)")
-    ax_sc.set_ylabel("Pooled Test Set F1 (%, raw +/-150 ms AAMI standard)")
+    ax_sc.set_ylabel("Pooled Test Set F1 (%, raw +/-150 ms)")
     ax_sc.set_title(f"A. Accuracy vs. Relative Speed (All {len(sub)} Detectors, Linear)", fontsize=10.2, loc="left", pad=10)
     ax_sc.grid(True, linestyle="--", linewidth=0.5, alpha=0.45)
 
@@ -529,10 +568,10 @@ def plot_speed_accuracy_cleansweep(
 
     wtl_map: dict[str, str] = {}
     if per_record_path and os.path.exists(per_record_path):
-        pr = pd.read_csv(per_record_path, low_memory=False)
+        pr = pd.read_csv(per_record_path, dtype={"record": str}, low_memory=False)
         pr_t = pr[(pr["variant"] == "raw") & (pr["tol_ms"] == 150.0) & (pr["db"].isin(TEST_DBS))].copy()
         denom = 2 * pr_t["tp"] + pr_t["fp"] + pr_t["fn"]
-        pr_t["rec_f1"] = np.where(denom > 0, 100.0 * 2 * pr_t["tp"] / denom, 0.0)
+        pr_t["rec_f1"] = np.where(denom > 0, 100.0 * 2 * pr_t["tp"] / denom.clip(lower=1), np.nan)
         avail = set(pr_t["method"].astype(str).str.lower())
         piv = pr_t.pivot_table(index=["db", "record"], columns="method", values="rec_f1", aggfunc="first")
         if "fusion" in piv.columns:
@@ -558,7 +597,7 @@ def plot_speed_accuracy_cleansweep(
     ax_sw_l.set_xlim(-0.6, split_x)
     ax_sw_r.set_xlim(21.0, max_x)
     ax_sw_l.set_xticks([0, 3, 6, 9, 12, 15])
-    ax_sw_r.set_xticks([25, 35, 45, 50])
+    ax_sw_r.set_xticks([t for t in mpl.ticker.MaxNLocator(3).tick_values(21.0, max_x) if 21.0 <= t <= max_x])
     ax_sw_l.spines["right"].set_visible(False)
     ax_sw_r.spines["left"].set_visible(False)
     ax_sw_r.tick_params(axis="y", length=0)
@@ -573,7 +612,7 @@ def plot_speed_accuracy_cleansweep(
             for ax in (ax_sw_l, ax_sw_r):
                 ax.errorbar(rl["diff"], i + 0.16, xerr=[[max(0.0, rl["diff"] - rl["ci_lo"])], [max(0.0, rl["ci_hi"] - rl["diff"])]], fmt="s", color=MID_GREEN, ecolor=MID_GREEN, elinewidth=1.2, capsize=2.0, markersize=4.3, zorder=4, label="Held-out LTAFDB gain (84 recs)" if (i == 0 and ax is ax_sw_l) else None)
         wtl = wtl_map.get(comp_raw, "")
-        ax_sw_r.text(max_x + 1.5, i, f"+{r['diff']:.2f}%  {wtl}", va="center", ha="left", fontsize=7.1, color="#222222")
+        ax_sw_r.text(max_x + 1.5, i, f"{r['diff']:+.2f} pts  {wtl}", va="center", ha="left", fontsize=7.1, color="#222222")
     ax_sw_l.set_yticks(y_c)
     ylabels = [f"#{r['rank']} {r['comp_clean']}" for _, r in pt.iterrows()]
     ax_sw_l.set_yticklabels(ylabels, fontsize=8.0)
@@ -581,11 +620,17 @@ def plot_speed_accuracy_cleansweep(
         if is_ours(r["comparator"]):
             tick.set_color(MID_GREEN)
             tick.set_fontweight("bold")
-    ax_sw_r.text(max_x + 1.5, -0.85, "Test dF1 (W/T/L)", ha="left", va="bottom", fontsize=7.6, fontweight="bold")
-    ax_sw_l.set_title(f"B. Clean Sweep: Paired F1 Gain Over All {n_comp} Baselines", fontsize=10.2, loc="left", pad=10)
-    ax_sw_l.set_xlabel("Paired dF1 = Fusion - Comparator (%, 95% bootstrap CI, linear)", fontsize=8.8, x=0.72)
+    ax_sw_r.text(max_x + 1.5, -0.85, "Test dF1 (records W/T/L)", ha="left", va="bottom", fontsize=7.6, fontweight="bold")
+    sig = (pt["verdict"].astype(str) == "reference better")
+    if sig.all():
+        sw_title = f"B. Fusion Significantly Better Than All {n_comp} Other Detectors (Test Set)"
+    else:
+        sw_title = f"B. Fusion vs. {n_comp} Other Detectors: Significantly Better Than {int(sig.sum())} (Test Set)"
+    ax_sw_l.set_title(sw_title, fontsize=10.2, loc="left", pad=10)
+    ax_sw_l.set_xlabel("Paired dF1 = Fusion - Comparator (F1 points, 95% bootstrap CI, linear)", fontsize=8.8, x=0.72)
     ax_sw_l.legend(loc="lower right", bbox_to_anchor=(0.98, 0.16), fontsize=7.5, frameon=True)
-    fig.suptitle(f"Relative Speed-Accuracy Trade-off & Record-Level Clean Sweep Across All {len(sub)} Detectors (Raw +/-150 ms)", fontsize=12.4, y=0.965)
+    tot = totals_text(dataset_totals(per_record_path))
+    fig.suptitle(f"Speed-Accuracy Trade-off and Paired Comparison, {len(sub)} Detectors (Raw +/-150 ms{', ' + tot if tot else ''})", fontsize=12.4, y=0.965)
     os.makedirs(out_dir, exist_ok=True)
     fig.savefig(os.path.join(out_dir, f"{stem}.png"), dpi=300)
     fig.savefig(os.path.join(out_dir, f"{stem}.pdf"))
@@ -594,7 +639,7 @@ def plot_speed_accuracy_cleansweep(
 
 
 # ===========================================================================
-# MAIN - this was missing, so running the file did nothing
+# MAIN
 # ===========================================================================
 def find_first(results_dir: Path, candidates: list[str]) -> str | None:
     for name in candidates:
@@ -628,7 +673,8 @@ def main() -> int:
     rr_path = find_first(results_dir, ["rr_error.csv"])
     per_record_path = find_first(results_dir, ["per_record.csv"])
     paired_test_path = find_first(results_dir, ["paired_raw_150.csv", "paired_test.csv"])
-    paired_ltaf_path = find_first(results_dir, ["paired_raw_150_ltafdb.csv", "paired_ltafdb.csv", "paired_oracle_75_ltafdb.csv"])
+    paired_ltaf_path = find_first(results_dir, ["paired_raw_150_ltafdb.csv", "paired_ltafdb.csv"])
+    paired_oracle_path = find_first(results_dir, ["paired_oracle_75.csv"])
 
     print(f"Using summary: {summary_path}")
     print(f"Using rr: {rr_path}")
@@ -646,7 +692,7 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Fig 1a: raw 150, the AAMI standard condition
-    plot_three_panel_benchmark(summary_path, rr_path, per_record_path, str(out_dir), variant="raw", tol_ms=150.0, stem="fig_comprehensive_raw150")
+    plot_three_panel_benchmark(summary_path, rr_path, per_record_path, str(out_dir), variant="raw", tol_ms=150.0, stem="fig_comprehensive_raw150", paired_path=paired_test_path)
 
     # Fig 1b: offset-corrected 75, only if that variant is in summary.csv
     try:
@@ -656,7 +702,7 @@ def main() -> int:
         print(f"  Could not check for offset75 variant: {e}")
         has_offset75 = False
     if has_offset75:
-        plot_three_panel_benchmark(summary_path, rr_path, per_record_path, str(out_dir), variant="offset_corrected", tol_ms=75.0, stem="fig_comprehensive_offset75")
+        plot_three_panel_benchmark(summary_path, rr_path, per_record_path, str(out_dir), variant="offset_corrected", tol_ms=75.0, stem="fig_comprehensive_offset75", paired_path=paired_oracle_path)
     else:
         print("\n[three-panel] SKIP offset75: no offset_corrected/75 rows in summary.csv")
 
