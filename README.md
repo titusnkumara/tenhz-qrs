@@ -1,6 +1,4 @@
-# tenhz-ecg
-
-**Rethinking how little data is needed for accurate ECG QRS detection.**
+# tenhz-ecg - ECG QRS detection using only 10 samples per second.
 
 Fast, deterministic QRS detection from a **10 Hz min-max representation** of single-lead ECG (`MinEl`, `TiTen`, and `Fusion`), compiled with Numba.
 
