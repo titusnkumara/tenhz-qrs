@@ -79,6 +79,12 @@ Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±15
   <img src="figures/fig_speed_accuracy_cleansweep.png" alt="Speed-accuracy trade-off and paired comparison" width="100%">
 </p>
 
+**Figure 3:** F1 against noise level on `NSTDB` (records 118 and 119 with added electrode-motion noise, 24 to −6 dB SNR), all 24 detectors. The dashed line is the best F1 any detector reaches at each noise level. `Fusion` is within 1.5 F1 points of it at every level and matches it at −6 dB.
+
+<p align="center">
+  <img src="figures/fig_nstdb_snr.png" alt="F1 against noise level on NSTDB" width="100%">
+</p>
+
 ### Notes on the competing detectors
 
 All competing detectors run on the same single lead at its native sampling rate. NeuroKit2 methods use the NeuroKit2 cleaning method of the same name where one exists, and `neurokit` cleaning otherwise.
@@ -99,6 +105,9 @@ python scripts/benchmark_three.py --data data --dbs mitdb svdb edb nsrdb qtdb tw
 
 # Build the figures
 python scripts/plot_figures.py --results results/benchmark_v1 --out figures/
+
+# Build the NSTDB noise-level figure
+python scripts/plot_nstdb_snr.py --results results/benchmark_v1 --out figures/
 
 # Print the runtime table below
 python scripts/runtime_table.py results/benchmark_v1
