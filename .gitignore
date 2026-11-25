@@ -19,6 +19,9 @@ venv/
 env/
 ENV/
 
+#debug
+debug/
+
 # Testing & linters
 .pytest_cache/
 .coverage
