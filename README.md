@@ -41,11 +41,12 @@ locs = tenhz.qrs_locations(ecg, fs=250, detector="titen")
 - Filtering is zero-phase (`filtfilt`), so processing is offline.
 - The first call compiles the Numba kernels and caches them locally; later runs load them from the cache.
 - R-peak snap: each detection is moved to the R extremum of its QRS, with one QRS polarity per record decided on the first minute with a clear polarity (at most 10 min scanned, otherwise upright). `fusion` snaps both detectors with `MinEl`'s polarity. Pass `snap=False` for detections without this option.
+- **Long recordings (2.1.1):** run `titen` and `fusion` on multi-day Holter recordings as they are; they recover from large transients and signal dropouts by default. Pass `recover=False` only to reproduce the detections of 2.1.0 and earlier.
 - `detector="fusion"` combines `MinEl` and `TiTen` on a shared 7–32 Hz stream using an RR-plausibility Viterbi decoder and an adaptive per-window switch. Its parameters were tuned on `MITDB` (excluding records `118` and `119`) and `SVDB` only.
 
 ## Results
 
-Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms. Results are for version 2.1.0 (R-peak snap on, the default). Version 2.0 (`snap=False`) gave the same F1 for `Fusion`, `MinEl` and `TiTen` within 0.03.
+Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms. Results use the default settings.
 
 - **Test set:** 274 recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`).
 - **Held out:** `LTAFDB`, 84 recordings, 1,961 h.
@@ -57,7 +58,7 @@ Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±15
 | :--- | :---: | :---: | :---: | :---: |
 | **Fusion (10 Hz)** | **99.60** | **99.01** | **4.2 / 8.9** | **1.8×** |
 | **MinEl (10 Hz)** | **99.52** | **98.95** | **4.2 / 9.5** | **1.6×** |
-| **TiTen (10 Hz)** | **99.48** | **98.71** | **4.1 / 8.9** | **1.0×** |
+| **TiTen (10 Hz)** | **99.48** | **98.68** | **4.1 / 8.9** | **1.0×** |
 | hamilton2002 | 99.39 | 98.61 | 10.3 / 18.0 | 37× |
 | WFDB `xqrs` | 99.37 | 97.77 | 4.5 / 10.1 | 71× |
 | emrich2023 | 99.35 | 98.27 | 4.5 / 9.6 | 72× |

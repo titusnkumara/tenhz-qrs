@@ -94,7 +94,7 @@ def titen_detect(ecg, fs, p, tsec):
                                float(p["sig_alpha"]), float(p["rr_start_beats"]),
                                float(p["rr_low_frac"]), float(p["rr_high_frac"]),
                                float(p["searchback_mult"]), float(p["thr_frac"]),
-                               thr_sig, thr_noise, thr_sig_r, thr_noise_r)
+                               thr_sig, thr_noise, thr_sig_r, thr_noise_r, float(p.get("wd_s", 0.0)))
     if p.get("amp_floor", 0) > 0:
         k = amps >= p["amp_floor"]
         locs, amps = locs[k], amps[k]
@@ -133,7 +133,10 @@ def snap_to_r(val, loc, tsec, minute_s=60.0, max_minutes=10, ratio=1.2, min_beat
     return nb[np.arange(len(loc)), j], pol
 
 
-def run_chain(x, fs, detector, snap=True):
+RECOVER_S = 20.0     # TiTen watchdog (recover=True, default): seconds without an accepted beat before its signal level is capped
+
+
+def run_chain(x, fs, detector, snap=True, recover=True):
     """Native-rate bandpass -> 10 Hz min-max stream -> detector -> (snap to R, default).
     Returns sorted, unique, 0-based native sample indices. snap=False gives the published detections."""
     det = PARAMS[detector]
@@ -143,7 +146,8 @@ def run_chain(x, fs, detector, snap=True):
     val, idx = minmax_stream(xf, fs, 10)
     tsec = (idx + 1) / fs                       # MATLAB's 1-based times
     fn = minel_detect if detector == "minel" else titen_detect
-    loc, _ = fn(val, 10, det["params"], tsec)
+    prm = dict(det["params"], wd_s=RECOVER_S) if (recover and detector == "titen") else det["params"]
+    loc, _ = fn(val, 10, prm, tsec)
     if snap:
         loc, _ = snap_to_r(val, loc, tsec)
     return np.unique(idx[loc])

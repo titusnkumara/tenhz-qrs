@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tenhz"
-version = "2.1.0"
+version = "2.1.1"
 description = "MinEl and TiTen QRS detection from a 10 Hz min-max representation of the ECG (Numba)"
 readme = "README.md"
 license = { text = "Apache-2.0" }

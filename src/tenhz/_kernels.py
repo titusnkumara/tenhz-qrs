@@ -263,8 +263,10 @@ def _mround1(x):
 
 @njit(cache=True)
 def _k_titen_main(pk, pl, I, E, TAU, use_time, sig_alpha, rr_start, rr_low, rr_high, sb_mult,
-                  thr_frac, thr_sig, thr_noise, thr_sig_r, thr_noise_r):
+                  thr_frac, thr_sig, thr_noise, thr_sig_r, thr_noise_r, wd):
     n = len(E); ni = len(I)
+    t_fire = -np.inf; t_last = -np.inf     # watchdog: last time it fired / last reference time
+    wmax = 0.0; wmax_r = 0.0               # largest candidate peaks since the last accepted beat or watchdog firing
     sig_memory = 1 - sig_alpha
     noise_alpha = 0.125; sb_alpha = 0.25
     noise_memory = 1 - noise_alpha; sb_memory = 1 - sb_alpha
@@ -277,6 +279,22 @@ def _k_titen_main(pk, pl, I, E, TAU, use_time, sig_alpha, rr_start, rr_low, rr_h
     sb_from = -1; sb_to = -1; sb_v = -np.inf; sb_k = -1
     for q in range(len(pk)):
         pki = pk[q]; pli = pl[q]
+        if wd > 0 and use_time:
+            # Recovery from a deadlock. If no beat has been accepted for `wd` s, the signal level cannot be higher than the
+            # largest candidate peak seen in that time: clamp it (e.g. a large initial transient otherwise keeps the
+            # threshold above every real beat for the rest of the record). It never fires while beats are being found.
+            t_acc = TAU[qi[nq - 1]] if nq > 0 else TAU[0]
+            t_ref = max(t_acc, t_fire)
+            if t_ref != t_last:
+                wmax = 0.0; wmax_r = 0.0; t_last = t_ref
+            if TAU[pli] - t_ref >= wd:
+                if wmax > 0 and sig_lev > wmax:
+                    sig_lev = wmax
+                if wmax_r > 0 and sig_lev_r > wmax_r:
+                    sig_lev_r = wmax_r
+                t_fire = TAU[pli]
+                thr_sig = noise_lev + thr_frac * (sig_lev - noise_lev); thr_noise = 0.5 * thr_sig
+                thr_sig_r = noise_lev_r + thr_frac * (sig_lev_r - noise_lev_r); thr_noise_r = 0.5 * thr_sig_r
         bc = nq
         if bc >= rr_start:
             s = max(1, bc - 8)
@@ -342,6 +360,11 @@ def _k_titen_main(pk, pl, I, E, TAU, use_time, sig_alpha, rr_start, rr_low, rr_h
         if noise_lev_r != 0 or sig_lev_r != 0:
             thr_sig_r = noise_lev_r + thr_frac * (sig_lev_r - noise_lev_r)
             thr_noise_r = 0.5 * thr_sig_r
+        if wd > 0:
+            if pki > wmax:
+                wmax = pki
+            if ar > wmax_r:
+                wmax_r = ar
     return qr[:nr].copy(), qa[:nr].copy()
 
 
