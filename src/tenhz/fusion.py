@@ -5,7 +5,7 @@ import numpy as np
 
 from ._kernels import _k_local_median, _k_pair_flags, _k_viterbi
 from ._signal import butter, filtfilt_matlab
-from .detectors import minel_detect, minmax_stream, titen_detect
+from .detectors import minel_detect, minmax_stream, snap_to_r, titen_detect
 from .params import PARAMS
 
 FUSION = {
@@ -71,15 +71,22 @@ def adaptive(m, t, fused, pm, pt, fs, win_s, thr):
     return np.sort(np.r_[keep_m, keep_f]).astype(np.int64), noisy.mean()
 
 
-def run_chain(x, fs):
-    """Sorted, unique, 0-based native sample indices."""
+def run_chain(x, fs, snap=True):
+    """Sorted, unique, 0-based native sample indices. With snap (default) MinEl and TiTen detections are moved to the
+    R extremum with one polarity (decided on MinEl's first minute) before they are fused."""
     lo, hi = FUSION["band"]
     b, a = butter(int(PARAMS["minel"]["order"]), [lo / (fs / 2), hi / (fs / 2)], btype="bandpass")
     xf = filtfilt_matlab(b, a, x)
     val, idx = minmax_stream(xf, fs, 10)
     tsec = (idx + 1) / fs
-    m = np.unique(idx[minel_detect(val, 10, PARAMS["minel"]["params"], tsec)[0]])
-    t = np.unique(idx[titen_detect(val, 10, PARAMS["titen"]["params"], tsec)[0]])
+    lm = minel_detect(val, 10, PARAMS["minel"]["params"], tsec)[0]
+    lt = titen_detect(val, 10, PARAMS["titen"]["params"], tsec)[0]
+    if snap:
+        lm, pol = snap_to_r(val, lm, tsec)
+        nb = np.stack([np.maximum(lt - 1, 0), lt, np.minimum(lt + 1, len(val) - 1)], axis=1)
+        lt = nb[np.arange(len(lt)), np.argmax(pol * val[nb], axis=1)] if len(lt) else lt
+    m = np.unique(idx[lm])
+    t = np.unique(idx[lt])
     pm, pt = pair_flags(m, t, int(round(FUSION["agree_s"] * fs)))
     V = viterbi(m, t, pm, pt, fs, FUSION["w_single"], FUSION["lam"], FUSION["start_pen"])
     return adaptive(m, t, V, pm, pt, fs, FUSION["win_s"], FUSION["thr"])[0]

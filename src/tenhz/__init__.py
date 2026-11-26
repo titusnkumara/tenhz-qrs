@@ -1,5 +1,7 @@
 """tenhz: MinEl and TiTen QRS detection from a 10 Hz min-max representation
-of the ECG (Numba-compiled; detections identical to the published reference).
+of the ECG (Numba-compiled). Detections are moved to the R extremum of each QRS
+with a per-record polarity (snap=True, default); snap=False gives detections
+identical to the published reference.
 
     >>> import tenhz
     >>> r = tenhz.detect(ecg, fs)                       # MinEl (default)
@@ -20,7 +22,7 @@ from .detectors import run_chain
 from .params import PARAMS
 
 __all__ = ["detect", "qrs_locations", "QRS", "parameters", "warmup", "DETECTORS", "EXPLORATORY", "ALL_DETECTORS"]
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 DETECTORS = ("minel", "titen")          # the published detectors
 EXPLORATORY = ("fusion",)                # opt-in: detect(..., "fusion")
@@ -36,13 +38,15 @@ def parameters():
     return copy.deepcopy(PARAMS)
 
 
-def detect(ecg, fs=None, detector="minel", *, sampling_rate=None):
+def detect(ecg, fs=None, detector="minel", *, sampling_rate=None, snap=True):
     """Detect R peaks in a single-lead ECG.
 
     ecg      : 1-D array-like, one lead (mV) at its native sampling rate
     fs       : sampling rate in Hz (``sampling_rate=`` is accepted as an alias)
     detector : "minel" (default), "titen", or "fusion" (exploratory, not in the paper's
                published results: MinEl+TiTen on one shared stream with an RR decoder)
+    snap     : move each detection to the R extremum of its QRS, with the record's QRS polarity decided
+               from its first minute (default True; False = published detections)
 
     Returns QRS(locations, peaks).
     """
@@ -63,13 +67,13 @@ def detect(ecg, fs=None, detector="minel", *, sampling_rate=None):
     band = _fusion.FUSION["band"] if key == "fusion" else PARAMS[key]["band"]
     if fs <= 2 * band[1]:
         raise ValueError(f"fs = {fs:g} Hz is too low for the {band[0]}-{band[1]} Hz band")
-    loc = (_fusion.run_chain(x, fs) if key == "fusion" else run_chain(x, fs, key)).astype(np.int64)
+    loc = (_fusion.run_chain(x, fs, snap) if key == "fusion" else run_chain(x, fs, key, snap)).astype(np.int64)
     return QRS(loc, x[loc])
 
 
-def qrs_locations(ecg, fs, detector="minel"):
+def qrs_locations(ecg, fs, detector="minel", snap=True):
     """Only the 0-based R-peak sample indices."""
-    return detect(ecg, fs, detector).locations
+    return detect(ecg, fs, detector, snap=snap).locations
 
 
 def warmup():

@@ -101,9 +101,41 @@ def titen_detect(ecg, fs, p, tsec):
     return locs, amps
 
 
-def run_chain(x, fs, detector):
-    """Native-rate bandpass -> 10 Hz min-max stream -> detector.
-    Returns sorted, unique, 0-based native sample indices."""
+def snap_to_r(val, loc, tsec, minute_s=60.0, max_minutes=10, ratio=1.2, min_beats=20):
+    """Move each detection to the R extremum of its QRS, with one QRS polarity per record.
+
+    val, tsec : the 10 Hz min-max stream (values) and its times in s
+    loc       : detections as indices into the stream
+    In the stream every block contributes its minimum and maximum in sample order, so the R and S extrema of a QRS are
+    neighbours: each detection is compared with the stream samples just before and after it (three gathers per beat).
+    Polarity comes from the first decisive minute (scanning at most `max_minutes`): a minute with at least `min_beats`
+    detections in which the median peak height and the median trough depth differ by at least `ratio`. This skips
+    start-up artefact; if no minute is decisive (biphasic QRS) the record is treated as upright.
+    Returns (snapped stream indices, polarity +1/-1).
+    """
+    loc = np.asarray(loc, np.int64)
+    if len(loc) == 0:
+        return loc, 1
+    n = len(val)
+    nb = np.stack([np.maximum(loc - 1, 0), loc, np.minimum(loc + 1, n - 1)], axis=1)
+    v = np.asarray(val, float)[nb]
+    t = np.asarray(tsec, float)[loc]
+    edges = np.searchsorted(t, t[0] + minute_s * np.arange(max_minutes + 1), side="left")
+    pol = 1
+    for a, b in zip(edges[:-1], edges[1:]):
+        if b - a < min_beats:
+            continue
+        pk = np.median(v[a:b].max(axis=1)); tr = np.median(-v[a:b].min(axis=1))
+        if max(pk, tr) >= ratio * min(pk, tr):
+            pol = 1 if pk >= tr else -1
+            break
+    j = np.argmax(pol * v, axis=1)
+    return nb[np.arange(len(loc)), j], pol
+
+
+def run_chain(x, fs, detector, snap=True):
+    """Native-rate bandpass -> 10 Hz min-max stream -> detector -> (snap to R, default).
+    Returns sorted, unique, 0-based native sample indices. snap=False gives the published detections."""
     det = PARAMS[detector]
     lo, hi = det["band"]
     b, a = butter(int(det["order"]), [lo / (fs / 2), hi / (fs / 2)], btype="bandpass")
@@ -112,4 +144,6 @@ def run_chain(x, fs, detector):
     tsec = (idx + 1) / fs                       # MATLAB's 1-based times
     fn = minel_detect if detector == "minel" else titen_detect
     loc, _ = fn(val, 10, det["params"], tsec)
+    if snap:
+        loc, _ = snap_to_r(val, loc, tsec)
     return np.unique(idx[loc])

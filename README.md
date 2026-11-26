@@ -40,11 +40,12 @@ locs = tenhz.qrs_locations(ecg, fs=250, detector="titen")
 - Single-lead 1-D array in mV, at least **10 seconds** long, finite values only (no `NaN`/`Inf`).
 - Filtering is zero-phase (`filtfilt`), so processing is offline.
 - The first call compiles the Numba kernels and caches them locally; later runs load them from the cache.
+- **R-peak snap (2.1, default on):** each detection is moved to the R extremum of its QRS, with one QRS polarity per record decided on the first minute with a clear polarity (at most 10 min scanned, otherwise upright). `fusion` snaps both detectors with `MinEl`'s polarity. Pass `snap=False` for detections bit-identical to 2.0.
 - `detector="fusion"` combines `MinEl` and `TiTen` on a shared 7–32 Hz stream using an RR-plausibility Viterbi decoder and an adaptive per-window switch. Its parameters were tuned on `MITDB` (excluding records `118` and `119`) and `SVDB` only.
 
 ## Results
 
-Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms.
+Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms. Results were produced with version 2.0, i.e. without the R-peak snap (`snap=False` in 2.1).
 
 - **Test set:** 274 recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`).
 - **Held out:** `LTAFDB`, 84 recordings, 1,961 h.
