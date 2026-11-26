@@ -83,11 +83,13 @@ Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±15
   <img src="figures/fig_speed_accuracy_cleansweep.png" alt="Speed-accuracy trade-off and paired comparison" width="100%">
 </p>
 
-**Figure 3:** F1 against noise level on `NSTDB` (records 118 and 119 with added electrode-motion noise, 24 to −6 dB SNR), all 24 detectors. The dashed line is the best F1 any detector reaches at each noise level. `Fusion` is within 1.5 F1 points of it at every level and matches it at −6 dB.
+**Figure 3:** F1 against noise level on `NSTDB` (records 118 and 119 with added electrode-motion noise, 24 to −6 dB SNR), all 24 detectors. The dashed line is the best F1 any detector reaches at each noise level. `Fusion` is within 1.7 F1 points of it at every level and matches it at 24, 12 and −6 dB.
 
 <p align="center">
   <img src="figures/fig_nstdb_snr.png" alt="F1 against noise level on NSTDB" width="100%">
 </p>
+
+**Note:** in Figure 3, `Fusion` is version 2.2.0 (see [Latest version](#latest-version-220)); `MinEl` and `TiTen` use the default settings, which are the same in 2.1.1 and 2.2.0. The other 21 detectors are from the 2.1.1 benchmark run.
 
 ### Notes on the competing detectors
 
