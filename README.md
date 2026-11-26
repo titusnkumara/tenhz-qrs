@@ -5,7 +5,7 @@
 Three single-lead QRS detectors (`MinEl`, `TiTen` and `Fusion`) that operate on 10 values per second, compiled with Numba.
 
 - **Accuracy:** Evaluated on 482 recordings (2,663 h, ~12 M beats) from 8 PhysioNet databases (`MITDB`, `SVDB`, `EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`, `LTAFDB`). `Fusion` scores significantly higher F1 than all 21 competing detectors, on both the test set and the held-out `LTAFDB`, which was not used for tuning. `MinEl` and `TiTen` rank directly below it and are not significantly worse than any competitor.
-- **Speed:** `TiTen` is the fastest of the three; `MinEl` takes 1.5× and `Fusion` 1.9× its runtime. Against the next three most accurate detectors (by test F1), `TiTen` runs 36× faster than `hamilton2002` and 72× faster than both WFDB `xqrs` and `emrich2023`, with a mean RR interval error below 5 ms on the test set.
+- **Speed:** `TiTen` is the fastest of the three; `MinEl` takes 1.6× and `Fusion` 1.8× its runtime. Against the next three most accurate detectors (by test F1), `TiTen` runs 37× faster than `hamilton2002`, 71× faster than WFDB `xqrs` and 72× faster than `emrich2023`, with a mean RR interval error below 5 ms on the test set.
 - **Determinism:** Identical detections on a Linux Xeon server and an Apple laptop.
 
 **Method:** The ECG is band-pass filtered at its native sampling rate, and each 200 ms block is reduced to its minimum and maximum, giving 10 values per second. Detection runs on this 10 Hz stream; each detected beat is reported at the native-rate sample of its extremum.
@@ -45,7 +45,7 @@ locs = tenhz.qrs_locations(ecg, fs=250, detector="titen")
 
 ## Results
 
-Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms. Results were produced with version 2.0, i.e. without the R-peak snap (`snap=False` in 2.1).
+Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms. Results are for version 2.1.0 (R-peak snap on, the default). Version 2.0 (`snap=False`) gave the same F1 for `Fusion`, `MinEl` and `TiTen` within 0.03.
 
 - **Test set:** 274 recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`).
 - **Held out:** `LTAFDB`, 84 recordings, 1,961 h.
@@ -55,13 +55,13 @@ Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±15
 
 | Detector | Test F1 (%) | LTAFDB F1 (%) | RR error MAE / RMSE (ms) | Runtime (TiTen = 1×) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Fusion (10 Hz)** | **99.61** | **99.04** | **4.4 / 8.8** | **1.9×** |
-| **MinEl (10 Hz)** | **99.54** | **98.97** | **4.3 / 8.9** | **1.5×** |
-| **TiTen (10 Hz)** | **99.48** | **98.69** | **4.3 / 9.2** | **1.0×** |
-| hamilton2002 | 99.39 | 98.61 | 10.3 / 18.0 | 36× |
-| WFDB `xqrs` | 99.37 | 97.77 | 4.5 / 10.1 | 72× |
+| **Fusion (10 Hz)** | **99.60** | **99.01** | **4.2 / 8.9** | **1.8×** |
+| **MinEl (10 Hz)** | **99.52** | **98.95** | **4.2 / 9.5** | **1.6×** |
+| **TiTen (10 Hz)** | **99.48** | **98.71** | **4.1 / 8.9** | **1.0×** |
+| hamilton2002 | 99.39 | 98.61 | 10.3 / 18.0 | 37× |
+| WFDB `xqrs` | 99.37 | 97.77 | 4.5 / 10.1 | 71× |
 | emrich2023 | 99.35 | 98.27 | 4.5 / 9.6 | 72× |
-| WFDB `gqrs` | 99.04 | 97.37 | 4.7 / 9.9 | 207× |
+| WFDB `gqrs` | 99.04 | 97.37 | 4.7 / 9.9 | 203× |
 
 **Figure 1:** all 24 detectors.
 - **A:** F1 on each of the 8 databases and the pooled test set.
@@ -122,19 +122,19 @@ Intel Xeon Platinum 8358 @ 2.60 GHz, 30 vCPUs, 200 GB RAM. Times are detection o
 
 | Detector | Total time | Share |
 | :--- | :---: | :---: |
-| `martinez2004` | 866.3 min (14.4 h) | 41.4% |
-| `christov2004` | 266.5 min (4.4 h) | 12.7% |
-| `zong2003` | 263.4 min (4.4 h) | 12.6% |
-| `WFDB gqrs` | 141.9 min (2.4 h) | 6.8% |
-| `engzeemod2012` | 115.4 min (1.9 h) | 5.5% |
-| `khamis2016` | 106.4 min (1.8 h) | 5.1% |
-| 15 other detectors combined | 330.8 min (5.5 h) | 15.8% |
-| **Fusion (10 Hz)** | **1.6 min (98 s)** | **0.08%** |
-| **MinEl (10 Hz)** | **1.3 min (81 s)** | **0.06%** |
-| **TiTen (10 Hz)** | **0.8 min (50 s)** | **0.04%** |
-| **All 24 detectors** | **2,094.5 min (34.9 h)** | **100%** |
+| `martinez2004` | 899.7 min (15.0 h) | 41.8% |
+| `christov2004` | 272.2 min (4.5 h) | 12.6% |
+| `zong2003` | 262.4 min (4.4 h) | 12.2% |
+| `WFDB gqrs` | 145.5 min (2.4 h) | 6.8% |
+| `engzeemod2012` | 119.4 min (2.0 h) | 5.5% |
+| `khamis2016` | 108.1 min (1.8 h) | 5.0% |
+| 15 other detectors combined | 342.3 min (5.7 h) | 15.9% |
+| **Fusion (10 Hz)** | **1.7 min (101 s)** | **0.08%** |
+| **MinEl (10 Hz)** | **1.4 min (82 s)** | **0.06%** |
+| **TiTen (10 Hz)** | **0.9 min (51 s)** | **0.04%** |
+| **All 24 detectors** | **2,153.5 min (35.9 h)** | **100%** |
 
-Total wall-clock time for the full benchmark with 30 workers: **75 min**.
+Total wall-clock time for the full benchmark with 30 workers: **77 min**.
 
 ## Citation
 
