@@ -48,6 +48,8 @@ locs = tenhz.qrs_locations(ecg, fs=250, detector="titen")
 
 Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms. Results use the default settings.
 
+**Version:** the results, figures and runtimes in this section and in [Runtime](#runtime) are for version 2.1.1 (commit `fb7a45d`). The latest version, 2.2.0, changes only the `Fusion` decoder; its F1 values are in [Latest version](#latest-version-220) at the end.
+
 - **Test set:** 274 recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`).
 - **Held out:** `LTAFDB`, 84 recordings, 1,961 h.
 - **RR error:** test set only.
@@ -119,7 +121,7 @@ Use the pinned versions in `requirements.txt`. Other versions of the competing l
 
 ## Runtime
 
-Intel Xeon Platinum 8358 @ 2.60 GHz, 30 vCPUs, 200 GB RAM. Times are detection only (reading files, saving detections and RR statistics are excluded), summed over all 482 recordings, run with 30 parallel workers.
+Version 2.1.1 (commit `fb7a45d`). Intel Xeon Platinum 8358 @ 2.60 GHz, 30 vCPUs, 200 GB RAM. Times are detection only (reading files, saving detections and RR statistics are excluded), summed over all 482 recordings, run with 30 parallel workers.
 
 | Detector | Total time | Share |
 | :--- | :---: | :---: |
@@ -148,3 +150,16 @@ If you use `tenhz` in your research, please cite:
   year    = {2026}
 }
 ```
+
+## Latest version (2.2.0)
+
+2.2.0 changes only the `Fusion` decoder: its local median RR now comes from a first decoding pass instead of from agreed `MinEl` beats only (in stretches where the two detectors disagree that median was about twice the true RR, so true beats were skipped, mostly at high heart rates), and candidates much smaller than the local beat amplitude are penalised. The eight decoder values were tuned on the training databases (`MITDB` without 118 and 119, `SVDB`, clean and with synthetic noise) only. `MinEl` and `TiTen` are unchanged. The 2.1 decoder stays available: `tenhz.fusion.run_chain(ecg, fs, params=tenhz.fusion.FUSION_2_1)`.
+
+F1 (%) of 2.2.0 with the default settings, beats matched within ±150 ms, same records as above. Runtimes were not re-measured.
+
+| Detector | Test F1 | LTAFDB F1 | NSTDB F1 | LTAFDB sensitivity ≥ 180 bpm |
+| :--- | :---: | :---: | :---: | :---: |
+| **Fusion 2.2.0** | **99.60** | **99.05** | **92.20** | **81.5** |
+| Fusion 2.1.1 | 99.60 | 99.01 | 91.95 | 76.9 |
+| MinEl (unchanged) | 99.52 | 98.95 | 90.79 | 71.7 |
+| TiTen (unchanged) | 99.48 | 98.68 | 91.69 | 75.1 |

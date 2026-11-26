@@ -22,7 +22,7 @@ from .detectors import run_chain
 from .params import PARAMS
 
 __all__ = ["detect", "qrs_locations", "QRS", "parameters", "warmup", "DETECTORS", "EXPLORATORY", "ALL_DETECTORS"]
-__version__ = "2.1.1"
+__version__ = "2.2.0"
 
 DETECTORS = ("minel", "titen")          # the published detectors
 EXPLORATORY = ("fusion",)                # opt-in: detect(..., "fusion")
@@ -44,7 +44,8 @@ def detect(ecg, fs=None, detector="minel", *, sampling_rate=None, snap=True, rec
     ecg      : 1-D array-like, one lead (mV) at its native sampling rate
     fs       : sampling rate in Hz (``sampling_rate=`` is accepted as an alias)
     detector : "minel" (default), "titen", or "fusion" (exploratory, not in the paper's
-               published results: MinEl+TiTen on one shared stream with an RR decoder)
+               published results: MinEl+TiTen on one shared stream with an RR decoder; 2.2 decoder by default,
+               tenhz.fusion.run_chain(x, fs, params=tenhz.fusion.FUSION_2_1) gives the 2.1 detections)
     snap     : move each detection to the R extremum of its QRS, with the record's QRS polarity decided
                from its first minute (default True; False = published detections)
 
