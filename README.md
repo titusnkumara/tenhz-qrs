@@ -41,14 +41,14 @@ locs = tenhz.qrs_locations(ecg, fs=250, detector="titen")
 - Filtering is zero-phase (`filtfilt`), so processing is offline.
 - The first call compiles the Numba kernels and caches them locally; later runs load them from the cache.
 - R-peak snap: each detection is moved to the R extremum of its QRS, with one QRS polarity per record decided on the first minute with a clear polarity (at most 10 min scanned, otherwise upright). `fusion` snaps both detectors with `MinEl`'s polarity. Pass `snap=False` for detections without this option.
-- **Long recordings (2.1.1):** run `titen` and `fusion` on multi-day Holter recordings as they are; they recover from large transients and signal dropouts by default. Pass `recover=False` only to reproduce the detections of 2.1.0 and earlier.
+- Long recordings : run `titen` and `fusion` on multi-day Holter recordings as they are; they recover from large transients and signal dropouts by default. Pass `recover=False` only to reproduce the detections of 2.1.0 and earlier.
 - `detector="fusion"` combines `MinEl` and `TiTen` on a shared 7–32 Hz stream using an RR-plausibility Viterbi decoder and an adaptive per-window switch. Its parameters were tuned on `MITDB` (excluding records `118` and `119`) and `SVDB` only.
 
 ## Results
 
 Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms. Results use the default settings.
 
-**Version:** the results, figures and runtimes in this section and in [Runtime](#runtime) are for version 2.2.0 (benchmark run of 27 November 2026 at commit `c83dc21`, `results/benchmark_v220`). 2.2.0 changes only the `Fusion` decoder; see [Changes in 2.2.0](#changes-in-220) at the end.
+**Version:** the results, figures and runtimes in this section and in [Runtime](#runtime) are for version 2.2.0 (benchmark run of 27 November 2026 at commit `c83dc21`). 2.2.0 changes only the `Fusion` decoder; see [Changes in 2.2.0](#changes-in-220) at the end.
 
 - **Test set:** 274 recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`).
 - **Held out:** `LTAFDB`, 84 recordings, 1,961 h.
