@@ -75,7 +75,7 @@ def records(data, dbs):
             print(f"  {db}: {d} or its _manifest.json not found, skipped"); continue
         man = json.load(open(mf))
         names = sorted(f[:-4] for f in os.listdir(d)
-                       if f.endswith(".txt") and not f.endswith(("-ann.txt", "-fs.txt")))
+                       if f.endswith(".txt") and not f.endswith(("-ann.txt", "-fs.txt", "-mask.txt")))
         if db == "nstdb":
             names = [n for n in names if n.startswith(("118e", "119e"))]
         if db == "mitdb":
