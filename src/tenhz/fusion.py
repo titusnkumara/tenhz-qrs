@@ -112,7 +112,7 @@ def adaptive(m, t, fused, pm, pt, fs, win_s, thr):
     return np.sort(np.r_[keep_m, keep_f]).astype(np.int64), noisy.mean()
 
 
-def run_chain(x, fs, snap=True, recover=True, params=None):
+def run_chain(x, fs, snap=True, recover=True, params=None, startup="robust"):
     """Sorted, unique, 0-based native sample indices. With snap (default) MinEl and TiTen detections are moved to the
     R extremum with one polarity (decided on MinEl's first minute) before they are fused. params: FUSION overrides."""
     P = dict(FUSION, **(params or {}))
@@ -122,7 +122,8 @@ def run_chain(x, fs, snap=True, recover=True, params=None):
     val, idx = minmax_stream(xf, fs, 10)
     tsec = (idx + 1) / fs
     lm = minel_detect(val, 10, PARAMS["minel"]["params"], tsec)[0]
-    lt = titen_detect(val, 10, dict(PARAMS["titen"]["params"], wd_s=RECOVER_S) if recover else PARAMS["titen"]["params"], tsec)[0]
+    lt = titen_detect(val, 10, dict(PARAMS["titen"]["params"], wd_s=RECOVER_S) if recover else PARAMS["titen"]["params"], tsec,
+                      startup)[0]
     pol = 1
     if snap:
         lm, pol = snap_to_r(val, lm, tsec)

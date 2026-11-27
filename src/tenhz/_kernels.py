@@ -263,7 +263,7 @@ def _mround1(x):
 
 @njit(cache=True)
 def _k_titen_main(pk, pl, I, E, TAU, use_time, sig_alpha, rr_start, rr_low, rr_high, sb_mult,
-                  thr_frac, thr_sig, thr_noise, thr_sig_r, thr_noise_r, wd):
+                  thr_frac, thr_sig, thr_noise, thr_sig_r, thr_noise_r, wd, rej=0.0, reinit=0.0):
     n = len(E); ni = len(I)
     t_fire = -np.inf; t_last = -np.inf     # watchdog: last time it fired / last reference time
     wmax = 0.0; wmax_r = 0.0               # largest candidate peaks since the last accepted beat or watchdog firing
@@ -288,13 +288,35 @@ def _k_titen_main(pk, pl, I, E, TAU, use_time, sig_alpha, rr_start, rr_low, rr_h
             if t_ref != t_last:
                 wmax = 0.0; wmax_r = 0.0; t_last = t_ref
             if TAU[pli] - t_ref >= wd:
-                if wmax > 0 and sig_lev > wmax:
-                    sig_lev = wmax
-                if wmax_r > 0 and sig_lev_r > wmax_r:
-                    sig_lev_r = wmax_r
+                if reinit > 0:
+                    # 2.3 start-up: re-initialise the levels from the last 2 s with the start-up rule
+                    a_ = max(0, pli - 20)
+                    if pli > a_:
+                        mx = I[a_]; sm = 0.0
+                        for z in range(a_, pli):
+                            sm += I[z]
+                            if I[z] > mx:
+                                mx = I[z]
+                        sig_lev = reinit * mx; noise_lev = 0.5 * sm / (pli - a_)
+                        b_ = min(pli, n)
+                        a2 = max(0, b_ - 20)
+                        if b_ > a2:
+                            mx = E[a2]; sm = 0.0
+                            for z in range(a2, b_):
+                                sm += E[z]
+                                if E[z] > mx:
+                                    mx = E[z]
+                            sig_lev_r = reinit * mx; noise_lev_r = 0.5 * sm / (b_ - a2)
+                else:
+                    if wmax > 0 and sig_lev > wmax:
+                        sig_lev = wmax
+                    if wmax_r > 0 and sig_lev_r > wmax_r:
+                        sig_lev_r = wmax_r
                 t_fire = TAU[pli]
                 thr_sig = noise_lev + thr_frac * (sig_lev - noise_lev); thr_noise = 0.5 * thr_sig
                 thr_sig_r = noise_lev_r + thr_frac * (sig_lev_r - noise_lev_r); thr_noise_r = 0.5 * thr_sig_r
+        if rej > 0 and sig_lev > 0 and pki > rej * sig_lev:
+            continue      # 2.3 start-up: implausibly large candidate (e.g. rail artefact): neither beat nor noise
         bc = nq
         if bc >= rr_start:
             s = max(1, bc - 8)

@@ -56,8 +56,32 @@ def minel_detect(x, fs, p, tsec):
     return locs.astype(np.int64), amps.astype(float)
 
 
-def titen_detect(ecg, fs, p, tsec):
-    """titen_detect with compiled loops."""
+STARTUP = {"init_s": 10.0, "watchdog_s": 5.0, "reject_mult": 20.0}   # 2.3 start-up (startup="robust")
+
+
+def _init_block(integ, n, robust):
+    """Start and length (stream samples) of the 2 s block that initialises TiTen's levels.
+    2.2: the first 2 s. 2.3 (robust): of the 2 s blocks in the first min(10 s, record), the block at order statistic
+    (nb-1)//4 of the block maxima (5 blocks: the second lowest), so a start of rail artefact does not set the levels."""
+    init_len = min(20, n)
+    if not robust:
+        return 0, init_len
+    nb = min(int(STARTUP["init_s"] * 10), n, len(integ)) // 20
+    if nb < 2:
+        return 0, init_len
+    mx = np.array([integ[20 * k:20 * k + 20].max() for k in range(nb)])
+    return 20 * int(np.argsort(mx, kind="stable")[(nb - 1) // 4]), 20
+
+
+def titen_detect(ecg, fs, p, tsec, startup="robust"):
+    """titen_detect with compiled loops. startup: "robust" (2.3, default) or "2.2" (the released 2.2 start-up).
+    robust = start-up levels from a quiet 2 s block of the first 10 s, candidates above 20x the signal level ignored,
+    and (when the watchdog is on, p["wd_s"] > 0) a 5 s watchdog that re-initialises the levels from the last 2 s."""
+    if startup not in ("robust", "2.2"):
+        raise ValueError(f"startup must be 'robust' or '2.2', not {startup!r}")
+    robust = startup == "robust"
+    if robust and p.get("wd_s", 0) > 0:
+        p = dict(p, wd_s=STARTUP["watchdog_s"])
     ecg = np.asarray(ecg, float)
     n = len(ecg)
     empty = (np.zeros(0, np.int64), np.zeros(0))
@@ -85,16 +109,18 @@ def titen_detect(ecg, fs, p, tsec):
     pk, pl = pk[keep], pl[keep]
     if len(pk) == 0:
         return empty
-    init_len = min(20, n)
-    thr_sig = float(np.max(integ[:init_len])) * p["init_sig_frac"]
-    thr_noise = float(np.mean(integ[:init_len])) * 0.5
-    thr_sig_r = float(np.max(ecg[:init_len])) * p["init_sig_frac"]
-    thr_noise_r = float(np.mean(ecg[:init_len])) * 0.5
+    a0, init_len = _init_block(integ, n, robust)
+    thr_sig = float(np.max(integ[a0:a0 + init_len])) * p["init_sig_frac"]
+    thr_noise = float(np.mean(integ[a0:a0 + init_len])) * 0.5
+    thr_sig_r = float(np.max(ecg[a0:a0 + init_len])) * p["init_sig_frac"]
+    thr_noise_r = float(np.mean(ecg[a0:a0 + init_len])) * 0.5
     locs, amps = _k_titen_main(pk, pl.astype(np.int64), integ, ecg, tau, use_time,
                                float(p["sig_alpha"]), float(p["rr_start_beats"]),
                                float(p["rr_low_frac"]), float(p["rr_high_frac"]),
                                float(p["searchback_mult"]), float(p["thr_frac"]),
-                               thr_sig, thr_noise, thr_sig_r, thr_noise_r, float(p.get("wd_s", 0.0)))
+                               thr_sig, thr_noise, thr_sig_r, thr_noise_r, float(p.get("wd_s", 0.0)),
+                               STARTUP["reject_mult"] if robust else 0.0,
+                               float(p["init_sig_frac"]) if robust else 0.0)
     if p.get("amp_floor", 0) > 0:
         k = amps >= p["amp_floor"]
         locs, amps = locs[k], amps[k]
@@ -133,10 +159,11 @@ def snap_to_r(val, loc, tsec, minute_s=60.0, max_minutes=10, ratio=1.2, min_beat
     return nb[np.arange(len(loc)), j], pol
 
 
-RECOVER_S = 20.0     # TiTen watchdog (recover=True, default): seconds without an accepted beat before its signal level is capped
+RECOVER_S = 20.0     # TiTen watchdog of the 2.2 start-up (recover=True): seconds without an accepted beat before its signal
+                     # level is capped; the 2.3 start-up (default) uses STARTUP["watchdog_s"] and re-initialises instead
 
 
-def run_chain(x, fs, detector, snap=True, recover=True):
+def run_chain(x, fs, detector, snap=True, recover=True, startup="robust"):
     """Native-rate bandpass -> 10 Hz min-max stream -> detector -> (snap to R, default).
     Returns sorted, unique, 0-based native sample indices. snap=False gives the published detections."""
     det = PARAMS[detector]
@@ -145,9 +172,11 @@ def run_chain(x, fs, detector, snap=True, recover=True):
     xf = filtfilt_matlab(b, a, x)
     val, idx = minmax_stream(xf, fs, 10)
     tsec = (idx + 1) / fs                       # MATLAB's 1-based times
-    fn = minel_detect if detector == "minel" else titen_detect
-    prm = dict(det["params"], wd_s=RECOVER_S) if (recover and detector == "titen") else det["params"]
-    loc, _ = fn(val, 10, prm, tsec)
+    if detector == "minel":
+        loc, _ = minel_detect(val, 10, det["params"], tsec)
+    else:
+        prm = dict(det["params"], wd_s=RECOVER_S) if recover else det["params"]
+        loc, _ = titen_detect(val, 10, prm, tsec, startup)
     if snap:
         loc, _ = snap_to_r(val, loc, tsec)
     return np.unique(idx[loc])

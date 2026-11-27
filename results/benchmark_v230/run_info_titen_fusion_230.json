@@ -1,0 +1,40 @@
+{
+  "wall_clock_min": 0.79,
+  "started": "2026-11-27 23:40:24 +1100",
+  "finished": "2026-11-27 23:41:12 +1100",
+  "workers": 8,
+  "records": 732,
+  "runs": 1464,
+  "methods": [
+    "titen",
+    "fusion"
+  ],
+  "dbs": [
+    "mitdb",
+    "svdb",
+    "edb",
+    "nsrdb",
+    "qtdb",
+    "twadb",
+    "nstdb",
+    "ltafdb",
+    "tele"
+  ],
+  "cpu": "arm",
+  "logical_cpus": 10,
+  "ram_gb": 32.0,
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "python": "3.12.16",
+  "tenhz": "2.3.0",
+  "libraries": {
+    "numpy": "2.5.5",
+    "scipy": "1.18.1",
+    "numba": "0.68.1",
+    "pandas": "3.1.1",
+    "wfdb": "5.5.1",
+    "neurokit2": "0.3.0",
+    "py-ecg-detectors": null
+  },
+  "git_commit": "abe7741",
+  "command": "scripts/benchmark_three.py --data ../../data --out ../../res/v230_ours --dbs mitdb svdb edb nsrdb qtdb twadb nstdb ltafdb tele --methods titen fusion --workers 8 --no-paired"
+}
