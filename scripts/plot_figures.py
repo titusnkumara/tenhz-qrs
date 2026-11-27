@@ -42,7 +42,7 @@ mpl.rcParams.update({
 
 TRAIN_DBS = ["mitdb", "svdb"]
 TEST_DBS = ["edb", "nsrdb", "qtdb", "twadb", "nstdb"]
-HELDOUT_DBS = ["ltafdb"]
+HELDOUT_DBS = ["ltafdb", "tele"]
 ALL_DBS = TRAIN_DBS + TEST_DBS + HELDOUT_DBS
 
 DARK_GREEN = "#005a32"
@@ -309,7 +309,8 @@ def plot_three_panel_benchmark(
     y_idx = np.arange(n_det)
 
     cols = [c for c in ALL_DBS if c in sub.columns] + ["test_F1"]
-    col_headers = ["MITDB\n(train)", "SVDB\n(train)", "EDB\n(test)", "NSRDB\n(test)", "QTDB\n(test)", "TWADB\n(test)", "NSTDB\n(test)", "LTAFDB\n(held-out)", "POOLED\nTEST"][:len(cols)]
+    col_headers = ["MITDB\n(train)", "SVDB\n(train)", "EDB\n(test)", "NSRDB\n(test)", "QTDB\n(test)", "TWADB\n(test)", "NSTDB\n(test)", "LTAFDB\n(held-out)", "TELE\n(held-out)", "POOLED\nTEST"]
+    col_headers = [h for h, c in zip(col_headers, ALL_DBS + ["test_F1"]) if c in cols]
     mat = sub[cols].to_numpy(dtype=float)
     cmap = build_universal_f1_cmap()
     ax_hm.imshow(mat / 100.0, aspect="auto", cmap=cmap, vmin=0.0, vmax=1.0)
@@ -328,7 +329,8 @@ def plot_three_panel_benchmark(
     if "ltafdb" in cols:
         ltaf_j = cols.index("ltafdb")
         ax_hm.axvline(ltaf_j - 0.5, color="white", linestyle="--", linewidth=1.4)
-        ax_hm.axvline(ltaf_j + 0.5, color="white", linestyle="-", linewidth=2.2)
+        last_j = cols.index("tele") if "tele" in cols else ltaf_j
+        ax_hm.axvline(last_j + 0.5, color="white", linestyle="-", linewidth=2.2)
     ax_hm.set_xticks(np.arange(len(cols)))
     ax_hm.set_xticklabels(col_headers, fontsize=7.5, fontweight="bold", color="#222222")
     ax_hm.xaxis.tick_top()
@@ -342,7 +344,7 @@ def plot_three_panel_benchmark(
         else:
             tick.set_color("#222222")
     title_tag = "(* = Fusion significantly better)" if stars else ""
-    ax_hm.set_title(f"A. F1 Across All 8 Databases & Pooled Test {title_tag}", fontsize=9.8, pad=26, loc="left")
+    ax_hm.set_title(f"A. F1 Across All 9 Databases & Pooled Test {title_tag}", fontsize=9.8, pad=26, loc="left")
     cbar_ax = ax_hm.inset_axes([0.02, -0.055, 0.96, 0.018])
     cb = fig.colorbar(mpl.cm.ScalarMappable(norm=mcolors.Normalize(0, 100), cmap=cmap), cax=cbar_ax, orientation="horizontal")
     cb.set_ticks([0, 35, 55, 72, 84, 91, 96, 100])

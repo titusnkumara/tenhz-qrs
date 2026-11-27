@@ -1,0 +1,53 @@
+{
+  "wall_clock_min": 1.09,
+  "started": "2026-11-27 21:36:35 +1100",
+  "finished": "2026-11-27 21:37:40 +1100",
+  "workers": 6,
+  "records": 250,
+  "runs": 5750,
+  "methods": [
+    "minel",
+    "titen",
+    "fusion",
+    "neurokit",
+    "pantompkins1985",
+    "hamilton2002",
+    "christov2004",
+    "engzeemod2012",
+    "elgendi2010",
+    "elgendi2013",
+    "gamboa2008",
+    "zong2003",
+    "ssf",
+    "manikandan2012",
+    "kalidas2017",
+    "khamis2016",
+    "nabian2018",
+    "martinez2004",
+    "rodrigues2021",
+    "emrich2023",
+    "xqrs",
+    "gqrs",
+    "energy"
+  ],
+  "dbs": [
+    "tele"
+  ],
+  "cpu": "arm",
+  "logical_cpus": 10,
+  "ram_gb": 32.0,
+  "os": "macOS-27.0.1-arm64-arm-64bit",
+  "python": "3.12.16",
+  "tenhz": "2.2.0",
+  "libraries": {
+    "numpy": "2.5.5",
+    "scipy": "1.18.1",
+    "numba": "0.68.1",
+    "pandas": "3.1.1",
+    "wfdb": "5.5.1",
+    "neurokit2": "0.3.0",
+    "py-ecg-detectors": null
+  },
+  "git_commit": "b087b67",
+  "command": "scripts/benchmark_three.py --data ../../data --out ../../res/tele_masked --dbs tele --methods ours nk2 wfdb baseline --workers 6"
+}

@@ -49,7 +49,7 @@ import competitors  # noqa: E402
 
 TRAIN = ["mitdb", "svdb"]
 TEST = ["edb", "nsrdb", "qtdb", "twadb", "nstdb"]
-HELDOUT = ["ltafdb"]       # held-out database: nothing was tuned on it; reported separately, never pooled with TEST
+HELDOUT = ["ltafdb","tele"]       # held-out database: nothing was tuned on it; reported separately, never pooled with TEST
 QTDB_OVERLAP = {  # QTDB excerpts of MITDB and SVDB recordings (QTDB documentation, Table 2)
     "sel100", "sel102", "sel103", "sel104", "sel114", "sel116", "sel117", "sel123", "sel213", "sel221",
     "sel223", "sel230", "sel231", "sel232", "sel233",
@@ -98,6 +98,19 @@ def load(data, db, rec):
     ann = np.round(ann).astype(np.int64) - 1
     ann = np.sort(ann[(ann >= 0) & (ann < len(ecg))])
     return ecg.astype(np.float32).astype(float), ann
+
+
+def load_mask(data, db, rec, n):
+    """Artifact mask (boolean, length n) from <rec>-mask.txt (1-based inclusive start end), or None.
+    TELE only: its reference beats exist outside the visual artifact mask, so detections inside it are not scored."""
+    f = os.path.join(data, f"{db}-mat", rec + "-mask.txt")
+    if not os.path.exists(f) or os.path.getsize(f) == 0:
+        return None
+    iv = np.atleast_2d(np.loadtxt(f, dtype=np.int64))
+    m = np.zeros(n, bool)
+    for s0, e0 in iv:
+        m[s0 - 1:e0] = True
+    return m
 
 
 def match(det, gt, tol):
@@ -220,6 +233,10 @@ def task(args):
         det = np.zeros(0, np.int64); err = f"{type(e).__name__}: {e}"[:200]
     sec = time.perf_counter() - t0          # detection only: saving and RR statistics are not timed
     note = competitors.take_note()
+    if not err and os.environ.get("TENHZ_TELE_MASK", "1") == "1":
+        mk = load_mask(data, db, rec, len(ecg))
+        if mk is not None:
+            det = np.asarray(det, np.int64); det = det[~mk[np.clip(det, 0, len(ecg) - 1)]]
     if save_dir and not err:
         os.makedirs(os.path.join(save_dir, db), exist_ok=True)
         np.save(os.path.join(save_dir, db, f"{rec}__{method}.npy"), np.asarray(det, np.int32))
@@ -565,7 +582,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", default=os.environ.get("TENHZ_DATA") or "data")
     ap.add_argument("--out", required=True, help="new folder for the results")
-    ap.add_argument("--dbs", nargs="*", default=TRAIN + TEST)
+    ap.add_argument("--dbs", nargs="*", default=TRAIN + TEST + ["tele"])
     ap.add_argument("--tol-ms", nargs="+", type=float, default=TOL_MS,
                     help="matching tolerance(s) in ms (default 150 75 40; the paper's primary tolerance is 150)")
     ap.add_argument("--methods", nargs="+", default=["ours"],
