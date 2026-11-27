@@ -42,14 +42,14 @@ locs = tenhz.qrs_locations(ecg, fs=250, detector="titen")
 - The first call compiles the Numba kernels and caches them locally; later runs load them from the cache.
 - R-peak snap: each detection is moved to the R extremum of its QRS, with one QRS polarity per record decided on the first minute with a clear polarity (at most 10 min scanned, otherwise upright). `fusion` snaps both detectors with `MinEl`'s polarity. Pass `snap=False` for detections without this option.
 - Long recordings : run `titen` and `fusion` on multi-day Holter recordings as they are; they recover from large transients and signal dropouts by default. Pass `recover=False` only to reproduce the detections of 2.1.0 and earlier.
-- Short recordings and artefact at the start: since 2.3.0 `titen` (and the `TiTen` branch of `fusion`) starts from a quiet 2 s block of the first 10 s, ignores candidates far above its signal level and re-initialises after 5 s without a beat, so a recording that starts with rail saturation is not lost. Pass `startup="2.2"` to reproduce the detections of 2.2.0. See [Changes in 2.3.0](#changes-in-230).
+- Recordings that start with artefact (e.g. rail saturation): handled by default since 2.3.0; `startup="2.2"` reproduces 2.2.0.
 - `detector="fusion"` combines `MinEl` and `TiTen` on a shared 7–32 Hz stream using an RR-plausibility Viterbi decoder and an adaptive per-window switch. Its parameters were tuned on `MITDB` (excluding records `118` and `119`) and `SVDB` only.
 
 ## Results
 
 Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms. Results use the default settings.
 
-**Version:** the accuracy results and figures in this section are for version 2.3.0 (`TiTen` and `Fusion` rerun on 27 November 2026; the competitors and `MinEl` are unchanged from the 2.2.0 run at commit `c83dc21`). 2.3.0 changes only `TiTen`'s start-up; see [Changes in 2.3.0](#changes-in-230). Runtimes, here and in [Runtime](#runtime), are from the 2.2.0 run, measured under the same conditions as the competitors; the 2.3.0 start-up changes detection time by less than 1% (`TiTen` ×1.006, `Fusion` ×1.001, measured back to back).
+**Version:** accuracy results and figures are for 2.3.0 (see [Changes in 2.3.0](#changes-in-230)). Runtimes, here and in [Runtime](#runtime), are from the 2.2.0 run at commit `c83dc21`; the 2.3.0 change adds under 1%.
 
 - **Test set:** 274 recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`).
 - **Held out:** `LTAFDB`, 84 recordings, 1,961 h; `TELE` (telehealth ECG, dry handheld electrodes, Khamis et al. 2016), 250 recordings, 2 h, scored outside its visual artefact mask.
@@ -156,30 +156,16 @@ If you use `tenhz` in your research, please cite:
 
 ## Changes in 2.3.0
 
-2.3.0 changes only `TiTen`'s start-up (and with it the `TiTen` branch of `Fusion`). `MinEl` and the `Fusion` decoder are unchanged.
+`TiTen` no longer loses recordings that start with rail-saturated signal, which is common with handheld telehealth devices: on `TELE` its F1 rises from 62.49 to 90.82. Its levels now start from a quiet 2 s block of the first 10 s, implausibly large peaks are ignored, and a 5 s watchdog re-initialises the levels. `MinEl` and the `Fusion` decoder are unchanged, and no other database moves by more than 0.1 F1. `startup="2.2"` reproduces 2.2.0.
 
-**Why.** On `TELE`, `TiTen` 2.2.0 scored F1 62.49 (sensitivity 46.4%). 132 of the 250 recordings start with several seconds of rail-saturated signal (about 5.5 mV, inside the visual artefact mask). `TiTen` set its levels from the first 2 s, accepted the rail artefact as beats, and its 20 s watchdog, counted from the last accepted artefact, came too late for recordings of 20–40 s. Its median sensitivity was 7.2% on those recordings and 97.4% on the others. `MinEl` keeps no state from the start of a recording and was not affected.
+The fix was designed after the `TELE` failure was found, on training data and synthetic clipped starts only. One acceptance rule was relaxed after the result; see [results/startup_230/PREREGISTRATION.md](results/startup_230/PREREGISTRATION.md).
 
-**What changed** (`startup="robust"`, default):
-1. The levels start from the 2 s block of the first 10 s with the second-lowest peak energy (order statistic (n−1)//4 of the block maxima), using the 2.2 rule on that block.
-2. Candidates above 20× the current signal level are ignored: neither beat nor noise.
-3. The watchdog fires after 5 s without a beat (was 20 s) and re-initialises the levels from the last 2 s with the start-up rule, instead of capping the signal level.
-
-No new parameter was tuned. `startup="2.2"` reproduces 2.2.0 exactly.
-
-**How it was chosen.** The design was fixed after the `TELE` failure was found, on training data only. It uses a synthetic set of 496 excerpts of 30 s from `MITDB` (without 118 and 119) and `SVDB`. 374 of them start with rail clipping: duration 1–15 s, rail at 3–10× the QRS amplitude, ranges chosen in advance from amplifier behaviour, not from `TELE`. Four variants were tried in a fixed order; this is the fourth. `TELE` was run once, after the choice. Rule B was relaxed after the result: the chosen variant reached synthetic F1 91.65, which passes the ≥ 90 bar but is 2.37 below `MinEl`, against a pre-set margin of 2.0. The full record is in `results/startup_230/PREREGISTRATION.md`.
-
-F1 (%), beats matched within ±150 ms, default settings.
-
-| Detector | MITDB | SVDB | Synthetic clipped starts | Test F1 | LTAFDB | TELE |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **TiTen 2.3.0** | **99.53** | **99.48** | **91.65** | **99.49** | **98.70** | **90.82** |
-| TiTen 2.2.0 | 99.52 | 99.48 | 53.25 | 99.48 | 98.68 | 62.49 |
-| **Fusion 2.3.0** | **99.71** | **99.74** | **93.64** | **99.60** | **99.05** | **94.85** |
-| Fusion 2.2.0 | 99.71 | 99.74 | 93.19 | 99.60 | 99.05 | 93.66 |
-| MinEl (unchanged) | 99.74 | 99.78 | 94.02 | 99.52 | 98.95 | 94.20 |
-
-No test database or `LTAFDB` lost more than 0.1 F1. The largest change is `TiTen` on `TWADB`, −0.054.
+| Detector | Test F1 | LTAFDB F1 | TELE F1 |
+| :--- | :---: | :---: | :---: |
+| **TiTen 2.3.0** | **99.49** | **98.70** | **90.82** |
+| TiTen 2.2.0 | 99.48 | 98.68 | 62.49 |
+| **Fusion 2.3.0** | **99.60** | **99.05** | **94.85** |
+| Fusion 2.2.0 | 99.60 | 99.05 | 93.66 |
 
 ## Changes in 2.2.0
 
