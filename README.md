@@ -5,7 +5,7 @@
 Three single-lead QRS detectors (`MinEl`, `TiTen` and `Fusion`) that operate on 10 values per second, compiled with Numba.
 
 - **Accuracy:** Evaluated on 482 recordings (2,663 h, ~12 M beats) from 8 PhysioNet databases (`MITDB`, `SVDB`, `EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`, `LTAFDB`). `Fusion` scores significantly higher F1 than all 21 competing detectors, on both the test set and the held-out `LTAFDB`, which was not used for tuning. `MinEl` and `TiTen` rank directly below it and are not significantly worse than any competitor.
-- **Speed:** `TiTen` is the fastest of the three; `MinEl` takes 1.7× and `Fusion` 2.3× its runtime. Against the next three most accurate detectors (by test F1), `TiTen` runs 37× faster than `hamilton2002`, 71× faster than WFDB `xqrs` and 72× faster than `emrich2023`, with a mean RR interval error below 5 ms on the test set.
+- **Speed:** `TiTen` is the fastest of the three; `MinEl` takes 1.7× and `Fusion` 2.3× its runtime. Against the next three most accurate detectors (by test F1), `TiTen` runs 37-53× faster than `hamilton2002`, 71-109× faster than WFDB `xqrs` and 72-107× faster than `emrich2023`, with a mean RR interval error below 5 ms on the test set.
 - **Determinism:** Identical detections on a Linux Xeon server and an Apple laptop.
 
 **Method:** The ECG is band-pass filtered at its native sampling rate, and each 200 ms block is reduced to its minimum and maximum, giving 10 values per second. Detection runs on this 10 Hz stream; each detected beat is reported at the native-rate sample of its extremum.
