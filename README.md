@@ -48,7 +48,7 @@ locs = tenhz.qrs_locations(ecg, fs=250, detector="titen")
 
 Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±150 ms. Results use the default settings.
 
-**Version:** the results, figures and runtimes in this section and in [Runtime](#runtime) are for version 2.1.1 (commit `fb7a45d`). The latest version, 2.2.0, changes only the `Fusion` decoder; its F1 values are in [Latest version](#latest-version-220) at the end.
+**Version:** the results, figures and runtimes in this section and in [Runtime](#runtime) are for version 2.2.0 (benchmark run of 27 November 2026 at commit `c83dc21`, `results/benchmark_v220`). 2.2.0 changes only the `Fusion` decoder; see [Changes in 2.2.0](#changes-in-220) at the end.
 
 - **Test set:** 274 recordings (`EDB`, `NSRDB`, `QTDB`, `TWADB`, `NSTDB`).
 - **Held out:** `LTAFDB`, 84 recordings, 1,961 h.
@@ -58,13 +58,13 @@ Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±15
 
 | Detector | Test F1 (%) | LTAFDB F1 (%) | RR error MAE / RMSE (ms) | Runtime (TiTen = 1×) |
 | :--- | :---: | :---: | :---: | :---: |
-| **Fusion (10 Hz)** | **99.60** | **99.01** | **4.2 / 8.9** | **1.8×** |
-| **MinEl (10 Hz)** | **99.52** | **98.95** | **4.2 / 9.5** | **1.6×** |
+| **Fusion (10 Hz)** | **99.60** | **99.05** | **4.2 / 8.7** | **2.3×** |
+| **MinEl (10 Hz)** | **99.52** | **98.95** | **4.2 / 9.5** | **1.7×** |
 | **TiTen (10 Hz)** | **99.48** | **98.68** | **4.1 / 8.9** | **1.0×** |
-| hamilton2002 | 99.39 | 98.61 | 10.3 / 18.0 | 37× |
-| WFDB `xqrs` | 99.37 | 97.77 | 4.5 / 10.1 | 71× |
-| emrich2023 | 99.35 | 98.27 | 4.5 / 9.6 | 72× |
-| WFDB `gqrs` | 99.04 | 97.37 | 4.7 / 9.9 | 203× |
+| hamilton2002 | 99.39 | 98.61 | 10.3 / 18.0 | 53× |
+| WFDB `xqrs` | 99.37 | 97.77 | 4.5 / 10.1 | 109× |
+| emrich2023 | 99.35 | 98.27 | 4.5 / 9.6 | 107× |
+| WFDB `gqrs` | 99.04 | 97.37 | 4.7 / 9.9 | 317× |
 
 **Figure 1:** all 24 detectors.
 - **A:** F1 on each of the 8 databases and the pooled test set.
@@ -89,8 +89,6 @@ Top 7 of 24 detectors (all are shown in Figure 1). Beats are matched within ±15
   <img src="figures/fig_nstdb_snr.png" alt="F1 against noise level on NSTDB" width="100%">
 </p>
 
-**Note:** in Figure 3, `Fusion` is version 2.2.0 (see [Latest version](#latest-version-220)); `MinEl` and `TiTen` use the default settings, which are the same in 2.1.1 and 2.2.0. The other 21 detectors are from the 2.1.1 benchmark run.
-
 ### Notes on the competing detectors
 
 All competing detectors run on the same single lead at its native sampling rate. NeuroKit2 methods use the NeuroKit2 cleaning method of the same name where one exists, and `neurokit` cleaning otherwise.
@@ -100,7 +98,7 @@ All competing detectors run on the same single lead at its native sampling rate.
 
 ## Reproducing the benchmark
 
-**Runtime:** The full benchmark takes about 35 hours of total compute, almost all of it in the slower competing detectors. Run it with several workers unless you need single-process timings.
+**Runtime:** The full benchmark takes about 54 hours of total compute, almost all of it in the slower competing detectors. Run it with several workers unless you need single-process timings.
 
 ```bash
 # Download the PhysioNet databases into data/
@@ -123,23 +121,23 @@ Use the pinned versions in `requirements.txt`. Other versions of the competing l
 
 ## Runtime
 
-Version 2.1.1 (commit `fb7a45d`). Intel Xeon Platinum 8358 @ 2.60 GHz, 30 vCPUs, 200 GB RAM. Times are detection only (reading files, saving detections and RR statistics are excluded), summed over all 482 recordings, run with 30 parallel workers.
+Version 2.2.0 (commit `c83dc21`). Intel Xeon Platinum 8358 @ 2.60 GHz, 30 vCPUs, 222 GB RAM. Times are detection only (reading files, saving detections and RR statistics are excluded), summed over all 482 recordings, run with 30 parallel workers.
 
 | Detector | Total time | Share |
 | :--- | :---: | :---: |
-| `martinez2004` | 899.7 min (15.0 h) | 41.8% |
-| `christov2004` | 272.2 min (4.5 h) | 12.6% |
-| `zong2003` | 262.4 min (4.4 h) | 12.2% |
-| `WFDB gqrs` | 145.5 min (2.4 h) | 6.8% |
-| `engzeemod2012` | 119.4 min (2.0 h) | 5.5% |
-| `khamis2016` | 108.1 min (1.8 h) | 5.0% |
-| 15 other detectors combined | 342.3 min (5.7 h) | 15.9% |
-| **Fusion (10 Hz)** | **1.7 min (101 s)** | **0.08%** |
-| **MinEl (10 Hz)** | **1.4 min (82 s)** | **0.06%** |
-| **TiTen (10 Hz)** | **0.9 min (51 s)** | **0.04%** |
-| **All 24 detectors** | **2,153.5 min (35.9 h)** | **100%** |
+| `martinez2004` | 892.1 min (14.9 h) | 27.5% |
+| `christov2004` | 523.0 min (8.7 h) | 16.1% |
+| `zong2003` | 501.9 min (8.4 h) | 15.5% |
+| `WFDB gqrs` | 295.5 min (4.9 h) | 9.1% |
+| `engzeemod2012` | 233.0 min (3.9 h) | 7.2% |
+| `khamis2016` | 163.3 min (2.7 h) | 5.0% |
+| 15 other detectors combined | 625.4 min (10.4 h) | 19.3% |
+| **Fusion (10 Hz)** | **2.6 min (156 s)** | **0.08%** |
+| **MinEl (10 Hz)** | **1.8 min (111 s)** | **0.06%** |
+| **TiTen (10 Hz)** | **1.0 min (62 s)** | **0.03%** |
+| **All 24 detectors** | **3,239.8 min (54.0 h)** | **100%** |
 
-Total wall-clock time for the full benchmark with 30 workers: **77 min**.
+Total wall-clock time for the full benchmark with 30 workers: **114 min**.
 
 ## Citation
 
@@ -153,15 +151,15 @@ If you use `tenhz` in your research, please cite:
 }
 ```
 
-## Latest version (2.2.0)
+## Changes in 2.2.0
 
 2.2.0 changes only the `Fusion` decoder: its local median RR now comes from a first decoding pass instead of from agreed `MinEl` beats only (in stretches where the two detectors disagree that median was about twice the true RR, so true beats were skipped, mostly at high heart rates), and candidates much smaller than the local beat amplitude are penalised. The eight decoder values were tuned on the training databases (`MITDB` without 118 and 119, `SVDB`, clean and with synthetic noise) only. `MinEl` and `TiTen` are unchanged. The 2.1 decoder stays available: `tenhz.fusion.run_chain(ecg, fs, params=tenhz.fusion.FUSION_2_1)`.
 
-F1 (%) of 2.2.0 with the default settings, beats matched within ±150 ms, same records as above. Runtimes were not re-measured.
+F1 (%) with the default settings, beats matched within ±150 ms, same records as above. Fusion 2.1.1 values are from the 2.1.1 benchmark run.
 
 | Detector | Test F1 | LTAFDB F1 | NSTDB F1 | LTAFDB sensitivity ≥ 180 bpm |
 | :--- | :---: | :---: | :---: | :---: |
-| **Fusion 2.2.0** | **99.60** | **99.05** | **92.20** | **81.5** |
+| **Fusion 2.2.0** | **99.60** | **99.05** | **92.19** | **81.5** |
 | Fusion 2.1.1 | 99.60 | 99.01 | 91.95 | 76.9 |
-| MinEl (unchanged) | 99.52 | 98.95 | 90.79 | 71.7 |
+| MinEl (unchanged) | 99.52 | 98.95 | 90.78 | 71.7 |
 | TiTen (unchanged) | 99.48 | 98.68 | 91.69 | 75.1 |
